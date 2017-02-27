@@ -14,10 +14,10 @@ No. Both projects are fundamentally different.
 Just like described [here](https://github.com/dimok789/homebrew_launcher/blob/master/README.md#building-the-homebrew-launcher).
 
 # Credits
-**dimok** for Homebrew Launcher project engine/base
-**BullyWiiPlaza** for further development of advanced/efficient features
-**wj44** for porting [`pyGecko`](https://github.com/wiiudev/pyGecko) to the Homebrew Launcher and some development
-**Marionumber1** for exploit development and TCP Gecko Installer contributions
-**NWPlayer123** for the `pyGecko` client library
-**Chadderz** for the original `TCP Gecko Installer`
+**dimok** for Homebrew Launcher project engine/base  
+**BullyWiiPlaza** for further development of advanced/efficient features  
+**wj44** for porting [`pyGecko`](https://github.com/wiiudev/pyGecko) to the Homebrew Launcher and some development  
+**Marionumber1** for exploit development and TCP Gecko Installer contributions  
+**NWPlayer123** for the `pyGecko` client library  
+**Chadderz** for the original `TCP Gecko Installer`  
 **Kinnay** for some `DiiBugger` code this project made use of
