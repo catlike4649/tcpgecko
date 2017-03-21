@@ -50,6 +50,8 @@ struct pygecko_bss_t {
 #define COMMAND_RPC 0x70
 #define COMMAND_GET_SYMBOL 0x71
 #define COMMAND_MEMORY_SEARCH 0x73
+#define COMMAND_SYS_CALL 0x80
+#define COMMAND_EXECUTE_ASSEMBLY 0x81
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_OS_VERSION 0x9A
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
@@ -61,6 +63,7 @@ struct pygecko_bss_t {
 #define FS_BUFFER_SIZE 0x1000
 #define DATA_BUFFER_SIZE 0x5000
 #define DISASSEMBLER_BUFFER_SIZE 0x1024
+#define ASSEMBLY_BUFFER_SIZE 0x190
 #define SERVER_VERSION "02/25/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
@@ -238,6 +241,17 @@ static int sendbyte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 
 	buffer[0] = byte;
 	return sendwait(bss, sock, buffer, 1);
+}
+
+void performSystemCall(int value) {
+	asm(
+	"li 0, %0\n"
+			"sc\n"
+			"blr\n"
+	: // No output
+	:"r"(value) // Input
+	:"0" // Overwritten register
+	);
 }
 
 void writeScreen(char message[100], int secondsDelay) {
@@ -1198,6 +1212,29 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				((int *) buffer)[0] = searchBytesOccurrences * 4;
 				ret = sendwait(bss, clientfd, buffer, 4 + (searchBytesOccurrences * 4));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (Sending search bytes occurrences)")
+
+				break;
+			}
+			case COMMAND_SYS_CALL: {
+				ret = recvwait(bss, clientfd, buffer, 4);
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (syscall)")
+
+				int value = ((int *) buffer)[0];
+
+				// TODO Exception DSI
+				performSystemCall(value);
+
+				break;
+			}
+			case COMMAND_EXECUTE_ASSEMBLY: {
+				char assemblyBuffer[ASSEMBLY_BUFFER_SIZE] = {0};
+
+				// Receive the assembly
+				receiveString(bss, clientfd, assemblyBuffer, ASSEMBLY_BUFFER_SIZE);
+
+				// Execute the assembly TODO Exception ISI
+				void (*function)() = (void *) assemblyBuffer;
+				function();
 
 				break;
 			}
