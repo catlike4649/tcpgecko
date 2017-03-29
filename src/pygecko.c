@@ -50,7 +50,7 @@ struct pygecko_bss_t {
 #define COMMAND_RPC 0x70
 #define COMMAND_GET_SYMBOL 0x71
 #define COMMAND_MEMORY_SEARCH 0x73
-#define COMMAND_SYS_CALL 0x80
+// #define COMMAND_SYSTEM_CALL 0x80
 #define COMMAND_EXECUTE_ASSEMBLY 0x81
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_OS_VERSION 0x9A
@@ -63,7 +63,7 @@ struct pygecko_bss_t {
 #define FS_BUFFER_SIZE 0x1000
 #define DATA_BUFFER_SIZE 0x5000
 #define DISASSEMBLER_BUFFER_SIZE 0x1024
-#define ASSEMBLY_BUFFER_SIZE 0x190
+#define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
 #define SERVER_VERSION "02/25/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
@@ -130,6 +130,24 @@ deflate OF((z_streamp
 strm,
 int flush
 ));
+
+/*struct breakpoint {
+	u32 address;
+	u32 instruction;
+};
+
+// 10 general breakpoints + 2 step breakpoints
+breakpoint breakpoints[12];
+
+breakpoint *getBreakpoint(u32 address, int size) {
+	breakpoint *breakpointsList = breakpoints;
+	for (int breakpointIndex = 0; breakpointIndex < size; breakpointIndex++) {
+		if (breakpointsList[breakpointIndex].address == address) {
+			return &breakpointsList[breakpointIndex];
+		}
+	}
+	return 0;
+}*/
 
 unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
@@ -243,7 +261,8 @@ static int sendbyte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 	return sendwait(bss, sock, buffer, 1);
 }
 
-void performSystemCall(int value) {
+/*void performSystemCall(int value) {
+	// TODO Exception DSI?
 	asm(
 	"li 0, %0\n"
 			"sc\n"
@@ -252,7 +271,7 @@ void performSystemCall(int value) {
 	:"r"(value) // Input
 	:"0" // Overwritten register
 	);
-}
+}*/
 
 void writeScreen(char message[100], int secondsDelay) {
 	// TODO Does nothing then crashes (in games)?
@@ -1054,11 +1073,11 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_WRITE_SCREEN: {
-				char message[100];
+				char message[WRITE_SCREEN_MESSAGE_BUFFER_SIZE];
 				ret = recvwait(bss, clientfd, buffer, 4);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (write screen seconds)")
 				int seconds = ((int *) buffer)[0];
-				receiveString(bss, clientfd, message, 100);
+				receiveString(bss, clientfd, message, WRITE_SCREEN_MESSAGE_BUFFER_SIZE);
 				writeScreen(message, seconds);
 
 				break;
@@ -1215,26 +1234,31 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			case COMMAND_SYS_CALL: {
+			/*case COMMAND_SYSTEM_CALL: {
 				ret = recvwait(bss, clientfd, buffer, 4);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (syscall)")
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (system call)")
 
 				int value = ((int *) buffer)[0];
 
-				// TODO Exception DSI
 				performSystemCall(value);
 
 				break;
-			}
+			}*/
 			case COMMAND_EXECUTE_ASSEMBLY: {
-				char assemblyBuffer[ASSEMBLY_BUFFER_SIZE] = {0};
-
 				// Receive the assembly
-				receiveString(bss, clientfd, assemblyBuffer, ASSEMBLY_BUFFER_SIZE);
+				receiveString(bss, clientfd, (char *) buffer, DATA_BUFFER_SIZE);
 
-				// Execute the assembly TODO Exception ISI
-				void (*function)() = (void *) assemblyBuffer;
+				// Write the assembly to an executable code region
+				int destinationAddress = 0x10000000 - DATA_BUFFER_SIZE;
+				pygecko_memcpy((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
+
+				// Execute the assembly from there
+				void (*function)() = (void (*)()) destinationAddress;
 				function();
+
+				// Clear the memory contents again
+				memset((void *) buffer, 0, DATA_BUFFER_SIZE);
+				pygecko_memcpy((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
 
 				break;
 			}
