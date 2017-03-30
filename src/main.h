@@ -12,7 +12,6 @@ extern "C" {
 //! C wrapper for our C++ functions
 int Menu_Main(void);
 
-extern int pygecko;
 extern int CCHandler;
 
 #ifdef __cplusplus

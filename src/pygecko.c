@@ -47,7 +47,7 @@ struct pygecko_bss_t {
 #define COMMAND_ACCOUNT_IDENTIFIER 0x57
 #define COMMAND_WRITE_SCREEN 0x58 // TODO Exception DSI
 #define COMMAND_FOLLOW_POINTER 0x60
-#define COMMAND_RPC 0x70
+#define COMMAND_REMOTE_PROCEDURE_CALL 0x70
 #define COMMAND_GET_SYMBOL 0x71
 #define COMMAND_MEMORY_SEARCH 0x73
 // #define COMMAND_SYSTEM_CALL 0x80
@@ -60,11 +60,9 @@ struct pygecko_bss_t {
 #define errno (*__gh_errno_ptr())
 #define MSG_DONTWAIT 32
 #define EWOULDBLOCK 6
-#define FS_BUFFER_SIZE 0x1000
 #define DATA_BUFFER_SIZE 0x5000
-#define DISASSEMBLER_BUFFER_SIZE 0x1024
 #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "02/25/2017"
+#define SERVER_VERSION "03/30/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
@@ -153,8 +151,7 @@ unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
 void pygecko_memcpy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
 	memcpy(memcpy_buffer, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer,
-						  length);
+	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer, length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
 
@@ -330,6 +327,7 @@ void considerInitializingFileSystem() {
 
 char *disassemblerBuffer;
 void *disassemblerBufferPointer;
+#define DISASSEMBLER_BUFFER_SIZE 0x1024
 
 void formatDisassembled(char *format, ...) {
 	if (!disassemblerBuffer) {
@@ -373,10 +371,6 @@ void reportIllegalCommandByte(int commandByte) {
 	__os_snprintf(errorBuffer, ERROR_BUFFER_SIZE, "Illegal command byte received: 0x%02x\nServer Version: %s",
 				  commandByte, SERVER_VERSION);
 	OSFatal(errorBuffer);
-}
-
-void writeInt(unsigned int address, unsigned int value) {
-	pygecko_memcpy((unsigned char *) address, (unsigned char *) &value, 4);
 }
 
 #define MINIMUM_KERNEL_COMPARE_LENGTH 4
@@ -919,7 +913,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_REPLACE_FILE: {
-				// TODO Write file
+				// TODO FSOpenFile ACCESS_ERROR
 
 				// Receive the file path
 				char file_path[FS_MAX_FULLPATH_SIZE] = {0};
@@ -962,12 +956,12 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 							ret = recvwait(bss, clientfd, fileBuffer, dataLength);
 							ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (File buffer)")
 
-							// Write the data and advance file handle position
+							// Write the data (and advance file handle position implicitly)
 							ret = FSWriteFile(client, commandBlock, fileBuffer, 1,
 											  dataLength, handle, 0, FS_RET_ALL_ERROR);
 							ASSERT_FUNCTION_SUCCEEDED(ret, "FSWriteFile")
 						} else {
-							// Done
+							// Done with receiving the new file
 							break;
 						}
 					}
@@ -1133,7 +1127,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				CHECK_ERROR(ret < 0)
 				break;
 			}
-			case COMMAND_RPC: {
+			case COMMAND_REMOTE_PROCEDURE_CALL: {
 				long long (*fun)(int, int, int, int, int, int, int, int);
 				int r3, r4, r5, r6, r7, r8, r9, r10;
 				long long result;
@@ -1234,16 +1228,16 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			/*case COMMAND_SYSTEM_CALL: {
-				ret = recvwait(bss, clientfd, buffer, 4);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (system call)")
+				/*case COMMAND_SYSTEM_CALL: {
+					ret = recvwait(bss, clientfd, buffer, 4);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (system call)")
 
-				int value = ((int *) buffer)[0];
+					int value = ((int *) buffer)[0];
 
-				performSystemCall(value);
+					performSystemCall(value);
 
-				break;
-			}*/
+					break;
+				}*/
 			case COMMAND_EXECUTE_ASSEMBLY: {
 				// Receive the assembly
 				receiveString(bss, clientfd, (char *) buffer, DATA_BUFFER_SIZE);

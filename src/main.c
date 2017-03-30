@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <malloc.h>
-
 #include <unistd.h>
 #include <fcntl.h>
 #include "dynamic_libs/os_functions.h"
@@ -19,8 +18,7 @@
 #include "utils/logger.h"
 #include "utils/utils.h"
 #include "common/common.h"
-
-#define FS_BUFFER_SIZE 40000
+#include "main.h"
 
 int CCHandler;
 
@@ -30,9 +28,10 @@ void startMiiMaker() {
 	_SYSLaunchTitleByPathFromLauncher(buf_vol_odd, 18, 0);
 }
 
-char *buffer[FS_BUFFER_SIZE];
+#define PRINT_TEXT2(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
 
-#define PRINT_TEXT2(x, y, ...) { snprintf(msg, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, msg); OSScreenPutFontEx(1, x, y, msg); }
+#define MAXIMUM_CODE_HANDLER_SIZE 15000
+char *codeHandlerBuffer[MAXIMUM_CODE_HANDLER_SIZE];
 
 /* Entry point */
 int Menu_Main(void) {
@@ -94,45 +93,36 @@ int Menu_Main(void) {
 
 	VPADInit();
 
-	// Prepare screen
-	int screen_buf0_size = 0;
-	int screen_buf1_size = 0;
-
 	// Init screen and screen buffers
 	OSScreenInit();
-	screen_buf0_size = OSScreenGetBufferSizeEx(0);
-	screen_buf1_size = OSScreenGetBufferSizeEx(1);
+	int screenBuffer0Size = OSScreenGetBufferSizeEx(0);
+	int screenBuffer1Size = OSScreenGetBufferSizeEx(1);
 
-	unsigned char *screenBuffer = MEM1_alloc(screen_buf0_size + screen_buf1_size, 0x40);
+	unsigned char *screenBuffer = MEM1_alloc(screenBuffer0Size + screenBuffer1Size, 0x40);
 
 	OSScreenSetBufferEx(0, screenBuffer);
-	OSScreenSetBufferEx(1, (screenBuffer + screen_buf0_size));
+	OSScreenSetBufferEx(1, (screenBuffer + screenBuffer0Size));
 
 	OSScreenEnableEx(0, 1);
 	OSScreenEnableEx(1, 1);
 
-	char msg[80];
+	char messageBuffer[80];
 	int launchMethod = 0;
 	int update_screen = 1;
 	int vpadError = -1;
 	VPADData vpad_data;
 
-	while (1) {
-		// Read vpad
+	while (true) {
 		VPADRead(0, &vpad_data, 1, &vpadError);
 
 		if (update_screen) {
 			OSScreenClearBufferEx(0, 0);
 			OSScreenClearBufferEx(1, 0);
 
-			// Print message
-			PRINT_TEXT2(14, 1, "-- TCPGecko Installer --");
-			PRINT_TEXT2(0, 5, "Press A to install TCPGecko.");
-			PRINT_TEXT2(0, 6, "Press X to install TCPGecko with CosmoCortney's codehandler...");
-
-
-			PRINT_TEXT2(0, 17, "Press home button to exit ...");
-
+			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
+			PRINT_TEXT2(0, 5, "Press A to install TCPGecko.")
+			PRINT_TEXT2(0, 6, "Press X to install TCPGecko with CosmoCortney's codehandler...")
+			PRINT_TEXT2(0, 17, "Press Home to exit ...")
 
 			OSScreenFlipBuffersEx(0);
 			OSScreenFlipBuffersEx(1);
@@ -145,46 +135,55 @@ int Menu_Main(void) {
 			launchMethod = 0;
 			break;
 		}
+
 		// A Button
 		if (pressedButtons & VPAD_BUTTON_A) {
 			launchMethod = 2;
 			break;
 		}
+
 		// X Button
 		if (pressedButtons & VPAD_BUTTON_X) {
 			mount_sd_fat("sd");
 
-			unsigned char *Badbuffer = 0;
-			unsigned int filesize = 0;
-			int ret = LoadFileToMem("sd:/wiiu/apps/TCPGecko/codehandler.bin", &Badbuffer, &filesize);
-			if (ret == -1) {
+			unsigned char *temporaryCodeHandlerBuffer = 0;
+			unsigned int codeHandlerSize = 0;
+			const char *filePath = "sd:/wiiu/apps/TCPGecko/codehandler.bin";
+			int codeHandlerLoaded = LoadFileToMem(filePath, &temporaryCodeHandlerBuffer, &codeHandlerSize);
+			if (codeHandlerLoaded == -1) {
 				OSScreenClearBufferEx(0, 0);
 				OSScreenClearBufferEx(1, 0);
-				PRINT_TEXT2(14, 5, "Codehandler.bin not found");
+				char codeHandlerNotFoundMessageBuffer[100];
+				snprintf(codeHandlerNotFoundMessageBuffer, sizeof(codeHandlerNotFoundMessageBuffer), "%s not found", filePath);
+				PRINT_TEXT2(0, 0, codeHandlerNotFoundMessageBuffer)
+				OSScreenFlipBuffersEx(0);
+				OSScreenFlipBuffersEx(1);
+				launchMethod = 0;
+				sleep(4);
+
+				break;
+			}
+
+			if (codeHandlerSize > MAXIMUM_CODE_HANDLER_SIZE) {
+				OSScreenClearBufferEx(0, 0);
+				OSScreenClearBufferEx(1, 0);
+				PRINT_TEXT2(14, 5, "Codehandler too big");
 				OSScreenFlipBuffersEx(0);
 				OSScreenFlipBuffersEx(1);
 				launchMethod = 0;
 				sleep(2);
+
 				break;
 			}
-			if (filesize > FS_BUFFER_SIZE) {
-				OSScreenClearBufferEx(0, 0);
-				OSScreenClearBufferEx(1, 0);
-				PRINT_TEXT2(14, 5, "Codehandler.bin is too big");
-				OSScreenFlipBuffersEx(0);
-				OSScreenFlipBuffersEx(1);
-				launchMethod = 0;
-				sleep(2);
-				break;
-			}
-			memcpy(buffer, Badbuffer, filesize);
-			free(Badbuffer);
 
-			unsigned int phys_cafe_codehandler_loc = (unsigned int) OSEffectiveToPhysical((void *) CODE_HANDLER_INSTALL_ADDRESS);
+			memcpy(codeHandlerBuffer, temporaryCodeHandlerBuffer, codeHandlerSize);
+			free(temporaryCodeHandlerBuffer);
 
-			DCFlushRange(&buffer, filesize);
-			SC0x25_KernelCopyData((u32) phys_cafe_codehandler_loc, (int) buffer, filesize);
-			m_DCInvalidateRange((u32) phys_cafe_codehandler_loc, filesize);
+			unsigned int physicalCodeHandlerAddress = (unsigned int) OSEffectiveToPhysical(
+					(void *) CODE_HANDLER_INSTALL_ADDRESS);
+			DCFlushRange(&codeHandlerBuffer, codeHandlerSize);
+			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (int) codeHandlerBuffer, codeHandlerSize);
+			m_DCInvalidateRange((u32) physicalCodeHandlerAddress, codeHandlerSize);
 
 			unmount_sd_fat("sd");
 			CCHandler = 1;

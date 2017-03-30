@@ -50,7 +50,7 @@ int UmountFS(void *pClient, void *pCmd, const char *mountPath)
 
 int LoadFileToMem(const char *filepath, u8 **inbuffer, u32 *size)
 {
-    //! always initialze input
+    // Always initialize input
 	*inbuffer = NULL;
     if(size)
         *size = 0;
