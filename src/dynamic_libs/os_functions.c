@@ -141,17 +141,29 @@ EXPORT_DECL(int, OSScreenEnableEx, unsigned int bufferNum, int enable);
 
 EXPORT_DECL(int, OSAllocFromSystem, unsigned int size, unsigned int align);
 
-EXPORT_DECL(int, OSFreeToSystem, void* ptr);
+EXPORT_DECL(int, OSFreeToSystem, void *ptr);
 
 EXPORT_DECL(void, DisassemblePPCRange, void *, void *, DisasmReport, DisasmGetSym, u32);
 
 EXPORT_DECL(bool, DisassemblePPCOpcode, u32 *, char *, u32, DisasmGetSym, u32);
 
-EXPORT_DECL(void*, OSGetSymbolName, u32, u8*, u32);
+EXPORT_DECL(void*, OSGetSymbolName, u32, u8 *, u32);
 
 EXPORT_DECL(int, OSIsDebuggerInitialized, void);
 
 // EXPORT_DECL(int, compress2, char *, int*, const char *, int, int);
+
+// !-------------
+
+EXPORT_DECL(int, IOS_Ioctl, int fd, unsigned int request, void *input_buffer, unsigned int input_buffer_len,
+			void *output_buffer, unsigned int output_buffer_len);
+
+EXPORT_DECL(int, IOS_IoctlAsync, int fd, unsigned int request, void *input_buffer, unsigned int input_buffer_len,
+			void *output_buffer, unsigned int output_buffer_len, void *cb, void *cbarg);
+
+EXPORT_DECL(int, IOS_Open, char *path, unsigned int mode);
+
+EXPORT_DECL(int, IOS_Close, int fd);
 
 //!----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //! Memory functions
@@ -162,7 +174,8 @@ EXPORT_VAR(unsigned int *, pMEMFreeToDefaultHeap);
 
 EXPORT_DECL(int, MEMGetBaseHeapHandle, int mem_arena);
 
-EXPORT_DECL(unsigned int, MEMGetAllocatableSizeForFrmHeapEx, int heap, int align);
+EXPORT_DECL(unsigned
+					int, MEMGetAllocatableSizeForFrmHeapEx, int heap, int align);
 
 EXPORT_DECL(void *, MEMAllocFromFrmHeapEx, int heap, unsigned int size, int align);
 

@@ -81,4 +81,3 @@ void InitSocketFunctionPointers(void)
 
     socket_lib_init();
 }
-

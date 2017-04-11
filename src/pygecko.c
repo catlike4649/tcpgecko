@@ -1,3 +1,4 @@
+#include <iosuhax.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -62,7 +63,7 @@ struct pygecko_bss_t {
 #define EWOULDBLOCK 6
 #define DATA_BUFFER_SIZE 0x5000
 #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "03/30/2017"
+#define SERVER_VERSION "04/11/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
@@ -913,6 +914,8 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_REPLACE_FILE: {
+				// int res = IOSUHAX_Open(NULL);
+
 				// TODO FSOpenFile ACCESS_ERROR
 
 				// Receive the file path

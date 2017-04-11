@@ -30,6 +30,8 @@ extern "C" {
 
 #include <gctypes.h>
 
+extern u32 hostIpAddress;
+
 #define INADDR_ANY      0
 
 #define AF_INET         2
