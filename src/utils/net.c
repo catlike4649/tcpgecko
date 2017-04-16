@@ -1,8 +1,8 @@
 #include <string.h>
 #include <malloc.h>
-#include "common/common.h"
-#include "dynamic_libs/os_functions.h"
-#include "dynamic_libs/socket_functions.h"
+#include "../common/common.h"
+#include "../dynamic_libs/os_functions.h"
+#include "../dynamic_libs/socket_functions.h"
 #include "net.h"
 
 static volatile int iLock = 0;

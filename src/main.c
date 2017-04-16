@@ -15,12 +15,11 @@
 #include "fs/sd_fat_devoptab.h"
 #include "kernel/kernel_functions.h"
 #include "system/memory.h"
-#include "utils/logger.h"
 #include "utils/utils.h"
 #include "common/common.h"
 #include "main.h"
 
-int CCHandler;
+int codeHandlerInstalled;
 
 void startMiiMaker() {
 	char buf_vol_odd[20];
@@ -44,12 +43,6 @@ int Menu_Main(void) {
 	InitFSFunctionPointers();
 	InitVPadFunctionPointers();
 	InitSysFunctionPointers();
-
-	const char ip_address[100] = "192.168.178.49";
-	log_init(ip_address);
-	log_deinit();
-	log_init(ip_address);
-	log_printf("Started %s\n", cosAppXmlInfoStruct.rpx_name);
 
 	if (strcasecmp("men.rpx", cosAppXmlInfoStruct.rpx_name) == 0) {
 		return EXIT_RELAUNCH_ON_LOAD;
@@ -194,7 +187,7 @@ int Menu_Main(void) {
 			m_DCInvalidateRange((u32) physicalCodeHandlerAddress, codeHandlerSize);
 
 			unmount_sd_fat("sd");
-			CCHandler = 1;
+			codeHandlerInstalled = 1;
 
 			launchMethod = 2;
 			break;
@@ -211,8 +204,6 @@ int Menu_Main(void) {
 
 	MEM1_free(screenBuffer);
 	screenBuffer = NULL;
-
-	log_deinit();
 
 	memoryRelease();
 

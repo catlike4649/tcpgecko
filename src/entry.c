@@ -16,7 +16,7 @@ int __entry_menu(int argc, char **argv) {
 		InitSocketFunctionPointers();
 		InitGX2FunctionPointers();
 
-		start_pygecko();
+		startTCPGecko();
 		return EXIT_RELAUNCH_ON_LOAD;
 	}
 

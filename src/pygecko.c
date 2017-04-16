@@ -14,6 +14,7 @@
 #include "dynamic_libs/fs_functions.h"
 #include "common/fs_defs.h"
 #include "system/exception_handler.h"
+#include "utils/logger.h"
 
 void *client;
 void *commandBlock;
@@ -53,6 +54,9 @@ struct pygecko_bss_t {
 #define COMMAND_MEMORY_SEARCH 0x73
 // #define COMMAND_SYSTEM_CALL 0x80
 #define COMMAND_EXECUTE_ASSEMBLY 0x81
+#define COMMAND_PAUSE_CONSOLE 0x82
+#define COMMAND_RESUME_CONSOLE 0x83
+#define COMMAND_IS_CONSOLE_PAUSED 0x84
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_OS_VERSION 0x9A
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
@@ -152,7 +156,8 @@ unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
 void pygecko_memcpy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
 	memcpy(memcpy_buffer, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer, length);
+	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer,
+						  length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
 
@@ -197,6 +202,48 @@ void startKernelCopyService() {
 	ASSERT_INTEGER(status, 1, "Creating kernel copy thread")
 	// OSSetThreadName(thread, "Kernel Copier");
 	OSResumeThread(thread);
+}
+
+int (*AVMGetDRCScanMode)(int);
+
+unsigned long getConsoleStatePatchAddress() {
+	if (AVMGetDRCScanMode) {
+		log_print("Already acquired!\n");
+	} else {
+		// Acquire the RPL and function
+		log_print("Acquiring...\n");
+		unsigned int avm_handle;
+		OSDynLoad_Acquire("avm.rpl", (u32 * ) & avm_handle);
+		ASSERT_ALLOCATED(avm_handle, "avm.rpl")
+		OSDynLoad_FindExport((u32) avm_handle, 0, "AVMGetDRCScanMode", &AVMGetDRCScanMode);
+		ASSERT_ALLOCATED(AVMGetDRCScanMode, "AVMGetDRCScanMode")
+		log_print("Acquired!\n");
+	}
+
+	return (unsigned long) (AVMGetDRCScanMode + 0x44);
+}
+
+typedef enum {
+	PAUSED = 0x38000001, RUNNING = 0x38000000
+} ConsoleState;
+
+void writeConsoleState(ConsoleState state) {
+	// Get the value to write
+	int patchValue = state;
+	log_printf("Patch value: %x\n", patchValue);
+
+	// Write the value
+	unsigned int patchAddress = getConsoleStatePatchAddress();
+	log_printf("Patch address: %x\n", patchAddress);
+	pygecko_memcpy((unsigned char *) patchAddress, (unsigned char *) &patchValue, 4);
+}
+
+bool isConsolePaused() {
+	unsigned int patchAddress = getConsoleStatePatchAddress();
+	log_printf("Patch address: %x\n", patchAddress);
+	int value = *(unsigned int *) patchAddress;
+
+	return value == PAUSED;
 }
 
 /*Validates the address range (last address inclusive) but is SLOW on bigger ranges */
@@ -252,7 +299,7 @@ static int sendwait(struct pygecko_bss_t *bss, int sock, const void *buffer, int
 	return ret;
 }
 
-static int sendbyte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
+static int sendByte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 	unsigned char buffer[1];
 
 	buffer[0] = byte;
@@ -405,7 +452,7 @@ int kernelMemoryCompare(const void *sourceBuffer,
 	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
 }
 
-static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
+static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 	int ret;
 
 	// Hold the command and the data
@@ -480,7 +527,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 					if (rangeIterationIndex == length) {
 						// No need to send all zero bytes for performance
-						ret = sendbyte(bss, clientfd, ONLY_ZEROS_READ);
+						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
 						CHECK_ERROR(ret < 0)
 					} else {
 						// TODO Compression of ptr, sending of status, compressed size and data, length: 1 + 4 + len(data)
@@ -527,7 +574,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 					if (rangeIterationIndex == length) {
 						// No need to send all zero bytes for performance
-						ret = sendbyte(bss, clientfd, ONLY_ZEROS_READ);
+						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
 						CHECK_ERROR(ret < 0)
 					} else {
 						// TODO Compression of ptr, sending of status, compressed size and data, length: 1 + 4 + len(data)
@@ -564,7 +611,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 				int isAddressRangeValid = validateAddressRange(startingAddress, endingAddress);
 
-				sendbyte(bss, clientfd, (unsigned char) isAddressRangeValid);
+				sendByte(bss, clientfd, (unsigned char) isAddressRangeValid);
 				break;
 			}
 				/*case COMMAND_DISASSEMBLE_RANGE: {
@@ -1126,7 +1173,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_SERVER_STATUS: {
-				ret = sendbyte(bss, clientfd, 1);
+				ret = sendByte(bss, clientfd, 1);
 				CHECK_ERROR(ret < 0)
 				break;
 			}
@@ -1259,6 +1306,24 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
+			case COMMAND_PAUSE_CONSOLE: {
+				writeConsoleState(PAUSED);
+
+				break;
+			}
+			case COMMAND_RESUME_CONSOLE: {
+				writeConsoleState(RUNNING);
+
+				break;
+			}
+			case COMMAND_IS_CONSOLE_PAUSED: {
+				bool paused = isConsolePaused();
+				log_printf("Paused: %d\n", paused);
+				ret = sendByte(bss, clientfd, (unsigned char) paused);
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendByte (sending paused console status)")
+
+				break;
+			}
 			case COMMAND_SERVER_VERSION: {
 				char versionBuffer[50];
 				strcpy(versionBuffer, SERVER_VERSION);
@@ -1299,7 +1364,7 @@ static int rungecko(struct pygecko_bss_t *bss, int clientfd) {
 	return 0;
 }
 
-static int start(int argc, void *argv) {
+static int runTCPGeckoServer(int argc, void *argv) {
 	int sockfd = -1, clientfd = -1, ret = 0, len;
 	struct sockaddr_in addr;
 	struct pygecko_bss_t *bss = argv;
@@ -1307,7 +1372,10 @@ static int start(int argc, void *argv) {
 	setup_os_exceptions();
 	socket_lib_init();
 
-	while (1) {
+	log_init("192.168.2.103");
+	log_print("TCP Gecko Installer\n");
+
+	while (true) {
 		addr.sin_family = AF_INET;
 		addr.sin_port = 7331;
 		addr.sin_addr.s_addr = 0;
@@ -1321,11 +1389,11 @@ static int start(int argc, void *argv) {
 		ret = listen(sockfd, 20);
 		CHECK_ERROR(ret < 0)
 
-		while (1) {
+		while (true) {
 			len = 16;
 			clientfd = accept(sockfd, (void *) &addr, &len);
 			CHECK_ERROR(clientfd == -1)
-			ret = rungecko(bss, clientfd);
+			ret = listenForCommands(bss, clientfd);
 			CHECK_ERROR(ret < 0)
 			socketclose(clientfd);
 			clientfd = -1;
@@ -1345,7 +1413,8 @@ static int start(int argc, void *argv) {
 	return 0;
 }
 
-static int CCThread(int argc, void *argv) {
+static int startTCPGeckoThread(int argc, void *argv) {
+	// Run the TCP Gecko Installer server
 	struct pygecko_bss_t *bss;
 
 	bss = memalign(0x40, sizeof(struct pygecko_bss_t));
@@ -1353,25 +1422,28 @@ static int CCThread(int argc, void *argv) {
 		return 0;
 	memset(bss, 0, sizeof(struct pygecko_bss_t));
 
-	if (OSCreateThread(&bss->thread, start, 1, bss, (u32) bss->stack + sizeof(bss->stack), sizeof(bss->stack), 0,
+	if (OSCreateThread(&bss->thread, runTCPGeckoServer, 1, bss, (u32) bss->stack + sizeof(bss->stack),
+					   sizeof(bss->stack), 0,
 					   0xc) == 1) {
 		OSResumeThread(&bss->thread);
 	} else {
 		free(bss);
 	}
 
-	if (CCHandler == 1) {
-		void (*entrypoint)() = (void *) CODE_HANDLER_INSTALL_ADDRESS;
+	// Execute the code handler if it is installed
+	if (codeHandlerInstalled) {
+		void (*codeHandlerFunction)() = (void (*)()) CODE_HANDLER_INSTALL_ADDRESS;
 
-		while (1) {
+		while (true) {
 			usleep(9000);
-			entrypoint();
+			codeHandlerFunction();
 		}
 	}
+
 	return 0;
 }
 
-void start_pygecko() {
+void startTCPGecko() {
 	// Force the debugger to be initialized by default
 	// writeInt((unsigned int) (OSIsDebuggerInitialized + 0x1C), 0x38000001); // li r3, 1
 
@@ -1381,7 +1453,7 @@ void start_pygecko() {
 	void *thread = memalign(0x40, 0x1000);
 	ASSERT_ALLOCATED(thread, "TCP Gecko thread")
 
-	int status = OSCreateThread(thread, CCThread, 1,
+	int status = OSCreateThread(thread, startTCPGeckoThread, 1,
 								NULL, (u32) stack + sizeof(stack),
 								sizeof(stack), 0,
 								OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY | OS_THREAD_ATTR_DETACH);

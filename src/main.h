@@ -12,7 +12,7 @@ extern "C" {
 //! C wrapper for our C++ functions
 int Menu_Main(void);
 
-extern int CCHandler;
+extern int codeHandlerInstalled;
 
 #ifdef __cplusplus
 }

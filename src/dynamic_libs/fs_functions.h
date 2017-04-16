@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-#include "common/fs_defs.h"
+#include "../common/fs_defs.h"
 
 void InitFSFunctionPointers(void);
 

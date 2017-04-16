@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 //! C wrapper for our C++ functions
-void start_pygecko(void);
+void startTCPGecko(void);
 
 #ifdef __cplusplus
 }
