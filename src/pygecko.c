@@ -12,9 +12,9 @@
 #include "dynamic_libs/gx2_functions.h"
 #include "kernel/syscalls.h"
 #include "dynamic_libs/fs_functions.h"
-#include "common/fs_defs.h"
 #include "system/exception_handler.h"
 #include "utils/logger.h"
+#include "system/memory.h"
 
 void *client;
 void *commandBlock;
@@ -60,6 +60,7 @@ struct pygecko_bss_t {
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_OS_VERSION 0x9A
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
+#define COMMAND_IOSUHAX_READ_FILE 0xD0
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
 #define errno (*__gh_errno_ptr())
@@ -416,7 +417,8 @@ int roundUpToAligned(int number) {
 
 void reportIllegalCommandByte(int commandByte) {
 	char errorBuffer[ERROR_BUFFER_SIZE];
-	__os_snprintf(errorBuffer, ERROR_BUFFER_SIZE, "Illegal command byte received: 0x%02x\nServer Version: %s",
+	__os_snprintf(errorBuffer, ERROR_BUFFER_SIZE,
+				  "Illegal command byte received: 0x%02x\nServer Version: %s\nIf you see this, you most likely have to update your TCP Gecko Installer.",
 				  commandByte, SERVER_VERSION);
 	OSFatal(errorBuffer);
 }
@@ -961,8 +963,6 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_REPLACE_FILE: {
-				// int res = IOSUHAX_Open(NULL);
-
 				// TODO FSOpenFile ACCESS_ERROR
 
 				// Receive the file path
@@ -1016,9 +1016,9 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 						}
 					}
 
-					/*// Flush the file back
-					ret = FSFlushFile(client, commandBlock, handle, FS_RET_ALL_ERROR);
-					CHECK_FUNCTION_FAILED(ret, "FSFlushFile")*/
+					// Flush the file back
+					// ret = FSFlushFile(client, commandBlock, handle, FS_RET_ALL_ERROR);
+					// CHECK_FUNCTION_FAILED(ret, "FSFlushFile")
 
 					// Close the file
 					ret = FSCloseFile(client, commandBlock, handle, FS_RET_ALL_ERROR);
@@ -1032,6 +1032,84 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 					ret = sendwait(bss, clientfd, buffer, 4);
 					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (status)")
 				}
+
+				break;
+			}
+			case COMMAND_IOSUHAX_READ_FILE: {
+				int returnValue = IOSUHAX_Open(NULL);
+				log_printf("IOSUHAX_Open: %i", returnValue);
+
+				if (returnValue < 0) {
+					goto IOSUHAX_OPEN_FAILED;
+				}
+
+				int fileSystemFileDescriptor = IOSUHAX_FSA_Open();
+				log_printf("IOSUHAX_FSA_Open: %i", fileSystemFileDescriptor);
+
+				if (fileSystemFileDescriptor < 0) {
+					goto IOSUHAX_FSA_OPEN_FAILED;
+				}
+
+				int fileDescriptor;
+				const char *filePath = "/vol/storage_usb/usr/title/0005000e/1010ed00/content/audio/stream/pBGM_GBA_CHEESELAND_F.bfstm";
+				returnValue = IOSUHAX_FSA_OpenFile(fileSystemFileDescriptor, filePath, "rb", &fileDescriptor);
+				log_printf("IOSUHAX_FSA_OpenFile: %i", returnValue);
+
+				if (returnValue < 0) {
+					goto IOSUHAX_OPEN_FILE_FAILED;
+				}
+
+				fileStat_s stats;
+				returnValue = IOSUHAX_FSA_StatFile(fileSystemFileDescriptor, fileDescriptor, &stats);
+				log_printf("IOSUHAX_FSA_StatFile: %i", returnValue);
+
+				if (returnValue < 0) {
+					goto IOSUHAX_READ_FILE_FAILED_CLOSE;
+				}
+
+				void *fileBuffer = MEMBucket_alloc(stats.size, 4);
+				log_printf("File Buffer: %p", fileBuffer);
+
+				if (!fileBuffer) {
+					goto IOSUHAX_READ_FILE_FAILED_CLOSE;
+				}
+
+				size_t totalBytesRead = 0;
+				while (totalBytesRead < stats.size) {
+					size_t remainingBytes = stats.size - totalBytesRead;
+					int bytesRead = IOSUHAX_FSA_ReadFile(fileSystemFileDescriptor,
+														 fileBuffer + totalBytesRead,
+														 0x01,
+														 remainingBytes,
+														 fileDescriptor,
+														 0);
+					log_printf("IOSUHAX_FSA_ReadFile: %i", bytesRead);
+
+					if (bytesRead <= 0) {
+						goto IOSUHAX_READ_FILE_FAILED_CLOSE;
+					} else {
+						totalBytesRead += bytesRead;
+					}
+				}
+
+				log_printf("Bytes read: %i", totalBytesRead);
+
+				IOSUHAX_READ_FILE_FAILED_CLOSE:
+
+				returnValue = IOSUHAX_FSA_CloseFile(fileSystemFileDescriptor, fileDescriptor);
+				log_printf("IOSUHAX_FSA_CloseFile: %i", returnValue);
+
+				IOSUHAX_OPEN_FILE_FAILED:
+
+				returnValue = IOSUHAX_FSA_Close(fileSystemFileDescriptor);
+				log_printf("IOSUHAX_FSA_Close: %i", returnValue);
+
+				IOSUHAX_FSA_OPEN_FAILED:
+
+				returnValue = IOSUHAX_Close();
+				log_printf("IOSUHAX_Close: %i", returnValue);
+
+				IOSUHAX_OPEN_FAILED:
 
 				break;
 			}

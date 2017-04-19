@@ -116,12 +116,13 @@ int Menu_Main(void) {
 			char ipAddressMessageBuffer[64];
 			InitSocketFunctionPointers();
 			__os_snprintf(ipAddressMessageBuffer, 64, "Your Wii U's IP address: %i.%i.%i.%i",
-						  (hostIpAddress >> 24) & 0xFF, (hostIpAddress >> 16) & 0xFF, (hostIpAddress >> 8) & 0xFF, hostIpAddress & 0xFF);
+						  (hostIpAddress >> 24) & 0xFF, (hostIpAddress >> 16) & 0xFF, (hostIpAddress >> 8) & 0xFF,
+						  hostIpAddress & 0xFF);
 
 			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
 			PRINT_TEXT2(7, 2, ipAddressMessageBuffer)
-			PRINT_TEXT2(0, 5, "Press A to install TCPGecko...")
-			PRINT_TEXT2(0, 6, "Press X to install TCPGecko with CosmoCortney's codehandler...")
+			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko...")
+			PRINT_TEXT2(0, 6, "Press X to install TCP Gecko with CosmoCortney's codehandler...")
 			PRINT_TEXT2(0, 17, "Press Home to exit...")
 
 			OSScreenFlipBuffersEx(0);
