@@ -49,7 +49,7 @@ extern void (* GX2SwapScanBuffers)(void);
 extern void (* GX2SetTVEnable)(s32 enable);
 extern void (* GX2SetSwapInterval)(u32 swap_interval);
 extern u32 (* GX2GetSwapInterval)(void);
-extern void (* GX2WaitForVsync)(void);
+extern void (* GX2WaitForVsync)(void); // Wait until the next vertical sync happens.
 extern void (* GX2CalcTVSize)(s32 tv_render_mode, s32 format, s32 buffering_mode, u32 * size, s32 * scale_needed);
 extern void (* GX2Invalidate)(s32 invalidate_type, void * ptr, u32 buffer_size);
 extern void (* GX2SetTVBuffer)(void *buffer, u32 buffer_size, s32 tv_render_mode, s32 format, s32 buffering_mode);

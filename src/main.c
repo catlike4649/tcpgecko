@@ -211,8 +211,6 @@ int Menu_Main(void) {
 	if (launchMethod == 0) {
 		RestoreInstructions();
 		return EXIT_SUCCESS;
-	} else if (launchMethod == 1) {
-		startMiiMaker();
 	} else {
 		SYSLaunchMenu();
 	}

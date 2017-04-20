@@ -15,6 +15,7 @@
 #include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
+#include "entry.h"
 
 void *client;
 void *commandBlock;
@@ -68,7 +69,7 @@ struct pygecko_bss_t {
 #define EWOULDBLOCK 6
 #define DATA_BUFFER_SIZE 0x5000
 #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "04/16/2017"
+#define SERVER_VERSION "04/20/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
@@ -454,7 +455,7 @@ int kernelMemoryCompare(const void *sourceBuffer,
 	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
 }
 
-static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
+static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 	int ret;
 
 	// Hold the command and the data
@@ -1036,7 +1037,11 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_IOSUHAX_READ_FILE: {
+				log_print("COMMAND_IOSUHAX_READ_FILE");
+
+				// TODO Crashes console on this call
 				int returnValue = IOSUHAX_Open(NULL);
+				log_print("IOSUHAX_Open Done");
 				log_printf("IOSUHAX_Open: %i", returnValue);
 
 				if (returnValue < 0) {
@@ -1059,15 +1064,15 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 					goto IOSUHAX_OPEN_FILE_FAILED;
 				}
 
-				fileStat_s stats;
-				returnValue = IOSUHAX_FSA_StatFile(fileSystemFileDescriptor, fileDescriptor, &stats);
+				fileStat_s fileStat;
+				returnValue = IOSUHAX_FSA_StatFile(fileSystemFileDescriptor, fileDescriptor, &fileStat);
 				log_printf("IOSUHAX_FSA_StatFile: %i", returnValue);
 
 				if (returnValue < 0) {
 					goto IOSUHAX_READ_FILE_FAILED_CLOSE;
 				}
 
-				void *fileBuffer = MEMBucket_alloc(stats.size, 4);
+				void *fileBuffer = MEMBucket_alloc(fileStat.size, 4);
 				log_printf("File Buffer: %p", fileBuffer);
 
 				if (!fileBuffer) {
@@ -1075,8 +1080,8 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}
 
 				size_t totalBytesRead = 0;
-				while (totalBytesRead < stats.size) {
-					size_t remainingBytes = stats.size - totalBytesRead;
+				while (totalBytesRead < fileStat.size) {
+					size_t remainingBytes = fileStat.size - totalBytesRead;
 					int bytesRead = IOSUHAX_FSA_ReadFile(fileSystemFileDescriptor,
 														 fileBuffer + totalBytesRead,
 														 0x01,
@@ -1442,42 +1447,52 @@ static int listenForCommands(struct pygecko_bss_t *bss, int clientfd) {
 	return 0;
 }
 
+int sockfd = -1, clientfd = -1, ret = 0, len;
+struct sockaddr_in socketAddress;
+struct pygecko_bss_t *bss;
+
 static int runTCPGeckoServer(int argc, void *argv) {
-	int sockfd = -1, clientfd = -1, ret = 0, len;
-	struct sockaddr_in addr;
-	struct pygecko_bss_t *bss = argv;
+	bss = argv;
 
 	setup_os_exceptions();
 	socket_lib_init();
 
-	log_init("192.168.2.103");
-	log_print("TCP Gecko Installer\n");
+	log_init(COMPUTER_IP_ADDRESS);
 
 	while (true) {
-		addr.sin_family = AF_INET;
-		addr.sin_port = 7331;
-		addr.sin_addr.s_addr = 0;
+		socketAddress.sin_family = AF_INET;
+		socketAddress.sin_port = 7331;
+		socketAddress.sin_addr.s_addr = 0;
 
+		log_printf("socket()...\n");
 		sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		CHECK_ERROR(sockfd == -1)
 
-		ret = bind(sockfd, (void *) &addr, 16);
+		log_printf("bind()...\n");
+		ret = bind(sockfd, (void *) &socketAddress, 16);
 		CHECK_ERROR(ret < 0)
 
+		log_printf("listen()...\n");
 		ret = listen(sockfd, 20);
 		CHECK_ERROR(ret < 0)
 
 		while (true) {
+			log_printf("accept()...\n");
 			len = 16;
-			clientfd = accept(sockfd, (void *) &addr, &len);
+			clientfd = accept(sockfd, (void *) &socketAddress, &len);
 			CHECK_ERROR(clientfd == -1)
-			ret = listenForCommands(bss, clientfd);
+			log_printf("commands()...\n");
+			ret = processCommands(bss, clientfd);
 			CHECK_ERROR(ret < 0)
 			socketclose(clientfd);
 			clientfd = -1;
+
+			log_printf("GX2WaitForVsync() inner...\n");
+			GX2WaitForVsync();
 		}
 
 		error:
+		log_printf("error, closing connection...\n");
 		if (clientfd != -1)
 			socketclose(clientfd);
 		if (sockfd != -1)
@@ -1485,6 +1500,7 @@ static int runTCPGeckoServer(int argc, void *argv) {
 		bss->error = ret;
 
 		// Fix the console freezing when e.g. going to the friend list
+		log_printf("GX2WaitForVsync() outer...\n");
 		GX2WaitForVsync();
 	}
 
@@ -1492,6 +1508,9 @@ static int runTCPGeckoServer(int argc, void *argv) {
 }
 
 static int startTCPGeckoThread(int argc, void *argv) {
+	log_init(COMPUTER_IP_ADDRESS);
+	log_print("Starting TCP Gecko thread...\n");
+
 	// Run the TCP Gecko Installer server
 	struct pygecko_bss_t *bss;
 
@@ -1508,20 +1527,29 @@ static int startTCPGeckoThread(int argc, void *argv) {
 		free(bss);
 	}
 
+	log_print("TCP Gecko thread started...\n");
+
 	// Execute the code handler if it is installed
 	if (codeHandlerInstalled) {
+		log_print("Code handler installed...\n");
 		void (*codeHandlerFunction)() = (void (*)()) CODE_HANDLER_INSTALL_ADDRESS;
 
 		while (true) {
 			usleep(9000);
+			// log_print("Running code handler...\n");
 			codeHandlerFunction();
 		}
+	} else {
+		log_print("Code handler not installed...\n");
 	}
 
 	return 0;
 }
 
 void startTCPGecko() {
+	log_init(COMPUTER_IP_ADDRESS);
+	log_print("Starting TCP Gecko...\n");
+
 	// Force the debugger to be initialized by default
 	// writeInt((unsigned int) (OSIsDebuggerInitialized + 0x1C), 0x38000001); // li r3, 1
 
@@ -1538,4 +1566,6 @@ void startTCPGecko() {
 	ASSERT_INTEGER(status, 1, "Creating TCP Gecko thread")
 	// OSSetThreadName(thread, "TCP Gecko");
 	OSResumeThread(thread);
+
+	log_print("TCP Gecko started...\n");
 }

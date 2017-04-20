@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#define COMPUTER_IP_ADDRESS "192.168.2.103"
+
 //! C wrapper for our C++ functions
 int Menu_Main(void);
 
