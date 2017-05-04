@@ -15,7 +15,6 @@
 #include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
-#include "entry.h"
 
 void *client;
 void *commandBlock;
@@ -62,6 +61,7 @@ struct pygecko_bss_t {
 #define COMMAND_OS_VERSION 0x9A
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSUHAX_READ_FILE 0xD0
+#define COMMAND_GET_VERSION_HASH 0xE0
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
 #define errno (*__gh_errno_ptr())
@@ -72,6 +72,8 @@ struct pygecko_bss_t {
 #define SERVER_VERSION "04/20/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
+
+#define VERSION_HASH 0x3516D3B9
 
 #define ASSERT_MINIMUM_HOLDS(actual, minimum, variableName) \
 if(actual < minimum) { \
@@ -1118,10 +1120,16 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
+			case COMMAND_GET_VERSION_HASH: {
+				((int *) buffer)[0] = VERSION_HASH;
+				ret = sendwait(bss, clientfd, buffer, 4);
+
+				break;
+			}
 			case COMMAND_GET_CODE_HANDLER_ADDRESS: {
 				((int *) buffer)[0] = CODE_HANDLER_INSTALL_ADDRESS;
 				ret = sendwait(bss, clientfd, buffer, 4);
-				CHECK_ERROR(ret < 0)
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (code handler address)")
 
 				break;
 			}
@@ -1530,7 +1538,7 @@ static int startTCPGeckoThread(int argc, void *argv) {
 	log_print("TCP Gecko thread started...\n");
 
 	// Execute the code handler if it is installed
-	if (codeHandlerInstalled) {
+	if (isCodeHandlerInstalled) {
 		log_print("Code handler installed...\n");
 		void (*codeHandlerFunction)() = (void (*)()) CODE_HANDLER_INSTALL_ADDRESS;
 

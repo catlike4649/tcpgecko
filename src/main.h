@@ -14,7 +14,7 @@ extern "C" {
 //! C wrapper for our C++ functions
 int Menu_Main(void);
 
-extern int codeHandlerInstalled;
+extern bool isCodeHandlerInstalled;
 
 #ifdef __cplusplus
 }

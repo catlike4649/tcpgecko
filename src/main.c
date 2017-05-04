@@ -11,26 +11,21 @@
 #include "dynamic_libs/vpad_functions.h"
 #include "dynamic_libs/socket_functions.h"
 #include "patcher/function_hooks.h"
-#include "fs/fs_utils.h"
-#include "fs/sd_fat_devoptab.h"
 #include "kernel/kernel_functions.h"
 #include "system/memory.h"
-#include "utils/utils.h"
 #include "common/common.h"
 #include "main.h"
+#include "code_handler.h"
 
-int codeHandlerInstalled;
+bool isCodeHandlerInstalled;
 
-void startMiiMaker() {
-	char buf_vol_odd[20];
-	snprintf(buf_vol_odd, sizeof(buf_vol_odd), "%s", "/vol/storage_odd03");
-	_SYSLaunchTitleByPathFromLauncher(buf_vol_odd, 18, 0);
-}
+// TODO Make sure accessing the browser does not freeze the console
 
 #define PRINT_TEXT2(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
 
-#define MAXIMUM_CODE_HANDLER_SIZE 15000
-char *codeHandlerBuffer[MAXIMUM_CODE_HANDLER_SIZE];
+typedef enum {
+	EXIT = 0x0, TCP_GECKO = 0x1
+} LaunchMethod;
 
 /* Entry point */
 int Menu_Main(void) {
@@ -100,7 +95,7 @@ int Menu_Main(void) {
 	OSScreenEnableEx(1, 1);
 
 	char messageBuffer[80];
-	int launchMethod = 0;
+	int launchMethod;
 	int update_screen = 1;
 	int vpadError = -1;
 	VPADData vpad_data;
@@ -122,7 +117,6 @@ int Menu_Main(void) {
 			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
 			PRINT_TEXT2(7, 2, ipAddressMessageBuffer)
 			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko...")
-			PRINT_TEXT2(0, 6, "Press X to install TCP Gecko with CosmoCortney's codehandler...")
 			PRINT_TEXT2(0, 17, "Press Home to exit...")
 
 			OSScreenFlipBuffersEx(0);
@@ -133,70 +127,25 @@ int Menu_Main(void) {
 
 		// Home Button
 		if (pressedButtons & VPAD_BUTTON_HOME) {
-			launchMethod = 0;
+			launchMethod = EXIT;
+
 			break;
 		}
 
 		// A Button
 		if (pressedButtons & VPAD_BUTTON_A) {
-			launchMethod = 2;
-			break;
-		}
-
-		// X Button
-		if (pressedButtons & VPAD_BUTTON_X) {
-			mount_sd_fat("sd");
-
-			unsigned char *temporaryCodeHandlerBuffer = 0;
-			unsigned int codeHandlerSize = 0;
-			const char *filePath = "sd:/wiiu/apps/TCPGecko/codehandler.bin";
-			int codeHandlerLoaded = LoadFileToMem(filePath, &temporaryCodeHandlerBuffer, &codeHandlerSize);
-			if (codeHandlerLoaded == -1) {
-				OSScreenClearBufferEx(0, 0);
-				OSScreenClearBufferEx(1, 0);
-				char codeHandlerNotFoundMessageBuffer[100];
-				snprintf(codeHandlerNotFoundMessageBuffer, sizeof(codeHandlerNotFoundMessageBuffer), "%s not found",
-						 filePath);
-				PRINT_TEXT2(0, 0, codeHandlerNotFoundMessageBuffer)
-				OSScreenFlipBuffersEx(0);
-				OSScreenFlipBuffersEx(1);
-				launchMethod = 0;
-				sleep(4);
-
-				break;
-			}
-
-			if (codeHandlerSize > MAXIMUM_CODE_HANDLER_SIZE) {
-				OSScreenClearBufferEx(0, 0);
-				OSScreenClearBufferEx(1, 0);
-				PRINT_TEXT2(14, 5, "Codehandler too big");
-				OSScreenFlipBuffersEx(0);
-				OSScreenFlipBuffersEx(1);
-				launchMethod = 0;
-				sleep(2);
-
-				break;
-			}
-
-			memcpy(codeHandlerBuffer, temporaryCodeHandlerBuffer, codeHandlerSize);
-			free(temporaryCodeHandlerBuffer);
-
 			unsigned int physicalCodeHandlerAddress = (unsigned int) OSEffectiveToPhysical(
 					(void *) CODE_HANDLER_INSTALL_ADDRESS);
-			DCFlushRange(&codeHandlerBuffer, codeHandlerSize);
-			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (int) codeHandlerBuffer, codeHandlerSize);
-			m_DCInvalidateRange((u32) physicalCodeHandlerAddress, codeHandlerSize);
+			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (int) codeHandler, codeHandlerLength);
+			DCFlushRange((const void *) CODE_HANDLER_INSTALL_ADDRESS, (u32) codeHandlerLength);
 
-			unmount_sd_fat("sd");
-			codeHandlerInstalled = 1;
-
-			launchMethod = 2;
+			isCodeHandlerInstalled = true;
+			launchMethod = TCP_GECKO;
 			break;
 		}
 
 		// Button pressed ?
-		update_screen = (pressedButtons & (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN))
-						? 1 : 0;
+		update_screen = (pressedButtons & (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN)) ? 1 : 0;
 		usleep(20 * 1000);
 	}
 
@@ -208,7 +157,7 @@ int Menu_Main(void) {
 
 	memoryRelease();
 
-	if (launchMethod == 0) {
+	if (launchMethod == EXIT) {
 		RestoreInstructions();
 		return EXIT_SUCCESS;
 	} else {
