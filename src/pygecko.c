@@ -416,7 +416,7 @@ int roundUpToAligned(int number) {
 	return (number + 3) & ~0x03;
 }
 
-#define ERROR_BUFFER_SIZE 100
+#define ERROR_BUFFER_SIZE 150
 
 void reportIllegalCommandByte(int commandByte) {
 	char errorBuffer[ERROR_BUFFER_SIZE];
