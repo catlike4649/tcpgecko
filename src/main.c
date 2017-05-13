@@ -116,7 +116,7 @@ int Menu_Main(void) {
 
 			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
 			PRINT_TEXT2(7, 2, ipAddressMessageBuffer)
-			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko...")
+			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko (with built-in code handler)...")
 			PRINT_TEXT2(0, 17, "Press Home to exit...")
 
 			OSScreenFlipBuffersEx(0);
