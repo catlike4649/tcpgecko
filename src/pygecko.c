@@ -15,6 +15,7 @@
 #include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
+#include "breakpoints/breakpoints.h"
 
 void *client;
 void *commandBlock;
@@ -58,7 +59,11 @@ struct pygecko_bss_t {
 #define COMMAND_RESUME_CONSOLE 0x83
 #define COMMAND_IS_CONSOLE_PAUSED 0x84
 #define COMMAND_SERVER_VERSION 0x99
-#define COMMAND_OS_VERSION 0x9A
+#define COMMAND_GET_OS_VERSION 0x9A
+#define COMMAND_SET_DATA_BREAKPOINT 0xA0
+#define COMMAND_GET_DATA_BREAKPOINT 0xA1
+#define COMMAND_SET_INSTRUCTION_BREAKPOINT 0xA2
+#define COMMAND_GET_INSTRUCTION_BREAKPOINT 0xA3
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSUHAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
@@ -1420,18 +1425,63 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				strcpy(versionBuffer, SERVER_VERSION);
 				int versionLength = strlen(versionBuffer);
 				((int *) buffer)[0] = versionLength;
-				memcpy(buffer + 4, versionBuffer, versionLength);
+				memcpy(buffer + sizeof(int), versionBuffer, versionLength);
 
 				// Send the length and the version string
-				ret = sendwait(bss, clientfd, buffer, 4 + versionLength);
+				ret = sendwait(bss, clientfd, buffer, sizeof(int) + versionLength);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (server version)");
 
 				break;
 			}
-			case COMMAND_OS_VERSION: {
+			case COMMAND_GET_OS_VERSION: {
 				((int *) buffer)[0] = (int) OS_FIRMWARE;
-				ret = sendwait(bss, clientfd, buffer, 4);
-				CHECK_ERROR(ret < 0)
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (OS version)");
+
+				break;
+			}
+			case COMMAND_SET_DATA_BREAKPOINT: {
+				ret = recvwait(bss, clientfd, buffer, 4 + 3 * 1);
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (data breakpoint)");
+				int bufferIndex = 0;
+				unsigned int address = ((unsigned int *) buffer)[bufferIndex];
+				bufferIndex += 4;
+				bool translate = buffer[bufferIndex++];
+				bool write = buffer[bufferIndex++];
+				bool read = buffer[bufferIndex];
+				struct DataBreakpoint dataBreakpoint;
+				dataBreakpoint.value = address;
+				dataBreakpoint.translate = translate;
+				dataBreakpoint.write = write;
+				dataBreakpoint.read = read;
+				setDataAddressBreakpointRegister(dataBreakpoint);
+
+				break;
+			}
+			case COMMAND_GET_DATA_BREAKPOINT: {
+				struct DataBreakpoint dataBreakpoint;
+				getDataAddressBreakpointRegisterContents(dataBreakpoint);
+				int structureSize = sizeof(dataBreakpoint);
+				memcpy(buffer, (const void *) &dataBreakpoint, structureSize);
+				ret = sendwait(bss, clientfd, buffer, structureSize);
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (data breakpoint)");
+
+				break;
+			}
+			case COMMAND_SET_INSTRUCTION_BREAKPOINT: {
+				// Read the address and set the breakpoint execute
+				ret = recvwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (instruction breakpoint)");
+				unsigned int address = ((unsigned int *) buffer)[0];
+				setInstructionAddressBreakpointRegister(address);
+
+				break;
+			}
+			case COMMAND_GET_INSTRUCTION_BREAKPOINT: {
+				int address = getInstructionAddressBreakpointRegister();
+				((int *) buffer)[0] = address;
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (instruction breakpoint)");
 
 				break;
 			}
@@ -1443,10 +1493,11 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			default:
+			default: {
 				reportIllegalCommandByte(ret);
 
 				break;
+			}
 		}
 	}
 

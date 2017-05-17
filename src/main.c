@@ -19,8 +19,6 @@
 
 bool isCodeHandlerInstalled;
 
-// TODO Make sure accessing the browser does not freeze the console
-
 #define PRINT_TEXT2(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
 
 typedef enum {

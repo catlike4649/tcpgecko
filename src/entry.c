@@ -1,4 +1,3 @@
-#include <string.h>
 #include "dynamic_libs/os_functions.h"
 #include "dynamic_libs/gx2_functions.h"
 #include "dynamic_libs/socket_functions.h"
