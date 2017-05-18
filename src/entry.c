@@ -8,11 +8,7 @@
 #include "title.h"
 
 int __entry_menu(int argc, char **argv) {
-	if (OSGetTitleID != 0
-		&& !isRunningTitleID(TITLE_ID_MII_VERSE)
-		&& !isRunningTitleID(TITLE_ID_MII_MAKER)
-		&& !isRunningTitleID(TITLE_ID_BAYONETTA_2)
-		&& !isRunningTitleID(TITLE_ID_INTERNET_BROWSER)) {
+	if (isRunningAllowedTitleID()) {
 		InitOSFunctionPointers();
 		InitSocketFunctionPointers();
 		InitGX2FunctionPointers();
