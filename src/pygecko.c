@@ -15,9 +15,9 @@
 #include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
-#include "breakpoints/breakpoints.h"
-#include "breakpoints/threads.h"
-#include "breakpoints/linked_list.h"
+#include "system/breakpoints.h"
+#include "system/threads.h"
+#include "utils/linked_list.h"
 
 void *client;
 void *commandBlock;
@@ -80,6 +80,8 @@ struct pygecko_bss_t {
 
 #define VERSION_HASH 0x3516D3B9
 
+// ########## Being assertions.h ############
+
 #define ASSERT_MINIMUM_HOLDS(actual, minimum, variableName) \
 if(actual < minimum) { \
     char buffer[100] = {0}; \
@@ -129,6 +131,8 @@ if(actual > maximum) { \
         OSFatal(buffer); \
     } \
 
+// ########## End assertions.h ############
+
 ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
 strm));
@@ -160,6 +164,8 @@ breakpoint *getBreakpoint(u32 address, int size) {
 	}
 	return 0;
 }*/
+
+// ########## Being kernel_copy.h ############
 
 unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
@@ -213,6 +219,41 @@ void startKernelCopyService() {
 	OSResumeThread(thread);
 }
 
+#define MINIMUM_KERNEL_COMPARE_LENGTH 4
+#define KERNEL_MEMORY_COMPARE_STEP_SIZE 1
+
+int kernelMemoryCompare(const void *sourceBuffer,
+						const void *destinationBuffer,
+						int length) {
+	if (length < MINIMUM_KERNEL_COMPARE_LENGTH) {
+		ASSERT_MINIMUM_HOLDS(length, MINIMUM_KERNEL_COMPARE_LENGTH, "length");
+	}
+
+	bool loopEntered = false;
+
+	while (kern_read(sourceBuffer) == kern_read(destinationBuffer)) {
+		loopEntered = true;
+		sourceBuffer = (char *) sourceBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
+		destinationBuffer = (char *) destinationBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
+		length -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
+
+		if (length <= MINIMUM_KERNEL_COMPARE_LENGTH - 1) {
+			break;
+		}
+	}
+
+	if (loopEntered) {
+		sourceBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
+		destinationBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
+	}
+
+	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
+}
+
+// ########## End kernel_copy.h ############
+
+// ########## Being pause.h ############
+
 int (*AVMGetDRCScanMode)(int);
 
 unsigned long getConsoleStatePatchAddress() {
@@ -255,10 +296,27 @@ bool isConsolePaused() {
 	return value == PAUSED;
 }
 
-/*Validates the address range (last address inclusive) but is SLOW on bigger ranges */
+// ########## End pause.h ############
+
+// ########## End address.h ############
+
 static int validateAddressRange(int starting_address, int ending_address) {
 	return __OSValidateAddressSpaceRange(1, (void *) starting_address, ending_address - starting_address + 1);
 }
+
+bool isValidDataAddress(int address) {
+	return OSIsAddressValid((const void *) address)
+		   && address >= 0x10000000
+		   && address < 0x50000000;
+}
+
+int roundUpToAligned(int number) {
+	return (number + 3) & ~0x03;
+}
+
+// ########## End address.h ############
+
+// ########## Being socket_functions.h ############
 
 static int recvwait(struct pygecko_bss_t *bss, int sock, void *buffer, int len) {
 	int ret;
@@ -315,6 +373,27 @@ static int sendByte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 	return sendwait(bss, sock, buffer, 1);
 }
 
+void receiveString(struct pygecko_bss_t *bss,
+				   int clientfd,
+				   char *stringBuffer,
+				   int bufferSize) {
+	// Receive the string length
+	char lengthBuffer[4] = {0};
+	int ret = recvwait(bss, clientfd, lengthBuffer, 4);
+	ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string length)")
+	int stringLength = ((int *) lengthBuffer)[0];
+
+	if (stringLength >= 0 && stringLength <= bufferSize) {
+		// Receive the actual string
+		ret = recvwait(bss, clientfd, stringBuffer, stringLength);
+		ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string)")
+	} else {
+		OSFatal("String buffer size exceeded");
+	}
+}
+
+// ########## Being socket_functions.h ############
+
 /*void performSystemCall(int value) {
 	// TODO Exception DSI?
 	asm(
@@ -341,25 +420,6 @@ void writeScreen(char message[100], int secondsDelay) {
 	OSScreenFlipBuffersEx(1);
 }
 
-void receiveString(struct pygecko_bss_t *bss,
-				   int clientfd,
-				   char *stringBuffer,
-				   int bufferSize) {
-	// Receive the string length
-	char lengthBuffer[4] = {0};
-	int ret = recvwait(bss, clientfd, lengthBuffer, 4);
-	ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string length)")
-	int stringLength = ((int *) lengthBuffer)[0];
-
-	if (stringLength >= 0 && stringLength <= bufferSize) {
-		// Receive the actual string
-		ret = recvwait(bss, clientfd, stringBuffer, stringLength);
-		ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string)")
-	} else {
-		OSFatal("String buffer size exceeded");
-	}
-}
-
 void considerInitializingFileSystem() {
 	if (!client) {
 		// Initialize the file system
@@ -381,6 +441,8 @@ void considerInitializingFileSystem() {
 		FSInitCmdBlock(commandBlock);
 	}
 }
+
+// ########## Start disassembler.h ############
 
 char *disassemblerBuffer;
 void *disassemblerBufferPointer;
@@ -411,15 +473,7 @@ void formatDisassembled(char *format, ...) {
 	free(temporaryBuffer);
 }
 
-bool isValidDataAddress(int address) {
-	return OSIsAddressValid((const void *) address)
-		   && address >= 0x10000000
-		   && address < 0x50000000;
-}
-
-int roundUpToAligned(int number) {
-	return (number + 3) & ~0x03;
-}
+// ########## End disassembler.h ############
 
 #define ERROR_BUFFER_SIZE 150
 
@@ -429,37 +483,6 @@ void reportIllegalCommandByte(int commandByte) {
 				  "Illegal command byte received: 0x%02x\nServer Version: %s\nIf you see this, you most likely have to update your TCP Gecko Installer.",
 				  commandByte, SERVER_VERSION);
 	OSFatal(errorBuffer);
-}
-
-#define MINIMUM_KERNEL_COMPARE_LENGTH 4
-#define KERNEL_MEMORY_COMPARE_STEP_SIZE 1
-
-int kernelMemoryCompare(const void *sourceBuffer,
-						const void *destinationBuffer,
-						int length) {
-	if (length < MINIMUM_KERNEL_COMPARE_LENGTH) {
-		ASSERT_MINIMUM_HOLDS(length, MINIMUM_KERNEL_COMPARE_LENGTH, "length");
-	}
-
-	bool loopEntered = false;
-
-	while (kern_read(sourceBuffer) == kern_read(destinationBuffer)) {
-		loopEntered = true;
-		sourceBuffer = (char *) sourceBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		destinationBuffer = (char *) destinationBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		length -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-
-		if (length <= MINIMUM_KERNEL_COMPARE_LENGTH - 1) {
-			break;
-		}
-	}
-
-	if (loopEntered) {
-		sourceBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		destinationBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-	}
-
-	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
 }
 
 static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
@@ -1155,6 +1178,8 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 					currentThread = currentThread->next;
 				}
+
+				destroy(threads);
 
 				break;
 			}

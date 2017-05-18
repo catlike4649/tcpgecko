@@ -1,8 +1,7 @@
-#include "bit.h"
-#include "stringify.h"
+#include "../utils/stringify.h"
 #include "../dynamic_libs/os_functions.h"
 #include "threads.h"
-#include "../system/exception_handler.h"
+#include "exception_handler.h"
 #include "../utils/logger.h"
 #include "../main.h"
 

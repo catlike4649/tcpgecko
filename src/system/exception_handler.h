@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include "../breakpoints/stringify.h"
+#include "../utils/stringify.h"
 
 #define OS_EXCEPTION_DSI                        2
 #define OS_EXCEPTION_ISI                        3

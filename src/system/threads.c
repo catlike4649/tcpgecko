@@ -1,5 +1,5 @@
 #include "threads.h"
-#include "linked_list.h"
+#include "../utils/linked_list.h"
 #include "../dynamic_libs/os_functions.h"
 
 struct node *getAllThreads() {
