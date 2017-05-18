@@ -140,6 +140,12 @@ extern int
 (*OSCreateThread)(void *thread, s32 (*callback)(s32, void *), s32 argc, void *args, u32 stack, u32 stack_size,
 				  s32 priority, u32 attr);
 
+extern void (*OSEnableInterrupts)(void);
+
+extern void (*OSSetDABR)(int, int, int, int);
+
+extern void (*OSSetIABR)(int, int);
+
 extern int (*OSGetCurrentThread)(void);
 
 extern int (*OSResumeThread)(void *thread);

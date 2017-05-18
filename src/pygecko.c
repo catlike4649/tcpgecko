@@ -16,6 +16,8 @@
 #include "utils/logger.h"
 #include "system/memory.h"
 #include "breakpoints/breakpoints.h"
+#include "breakpoints/threads.h"
+#include "breakpoints/linked_list.h"
 
 void *client;
 void *commandBlock;
@@ -61,9 +63,7 @@ struct pygecko_bss_t {
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_GET_OS_VERSION 0x9A
 #define COMMAND_SET_DATA_BREAKPOINT 0xA0
-#define COMMAND_GET_DATA_BREAKPOINT 0xA1
 #define COMMAND_SET_INSTRUCTION_BREAKPOINT 0xA2
-#define COMMAND_GET_INSTRUCTION_BREAKPOINT 0xA3
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSUHAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
@@ -1139,43 +1139,22 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_READ_THREADS: {
-				int OS_THREAD_SIZE = 0x6A0;
+				struct node *threads = getAllThreads();
+				int threadCount = length(threads);
+				struct node* currentThread = threads;
 
-				int currentThreadAddress = OSGetCurrentThread();
-				ASSERT_VALID_EFFECTIVE_ADDRESS(currentThreadAddress, "OSGetCurrentThread")
-				int iterationThreadAddress = currentThreadAddress;
-				int temporaryThreadAddress;
+				// Send the thread count
+				((int *) buffer)[0] = threadCount;
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
 
-				// Follow "previous thread" pointers back to the beginning
-				while ((temporaryThreadAddress = *(int *) (iterationThreadAddress + 0x390)) != 0) {
-					iterationThreadAddress = temporaryThreadAddress;
-					ASSERT_VALID_EFFECTIVE_ADDRESS(iterationThreadAddress, "iterationThreadAddress going backwards")
+				// Send the thread addresses and data
+				while (currentThread != NULL) {
+					((int *) buffer)[0] = (int) currentThread->data;
+					memcpy(buffer + sizeof(int), currentThread->data, THREAD_SIZE);
+					ret = sendwait(bss, clientfd, buffer, sizeof(int) + THREAD_SIZE);
+
+					currentThread = currentThread->next;
 				}
-
-				// Send all threads by following the "next thread" pointers
-				while ((temporaryThreadAddress = *(int *) (iterationThreadAddress + 0x38C)) != 0) {
-					// Send the starting thread's address
-					((int *) buffer)[0] = iterationThreadAddress;
-
-					// Send the thread struct itself
-					memcpy(buffer + 4, (void *) iterationThreadAddress, OS_THREAD_SIZE);
-					ret = sendwait(bss, clientfd, buffer, 4 + OS_THREAD_SIZE);
-					CHECK_ERROR(ret < 0)
-
-					iterationThreadAddress = temporaryThreadAddress;
-					ASSERT_VALID_EFFECTIVE_ADDRESS(iterationThreadAddress, "iterationThreadAddress going forwards")
-				}
-
-				// The previous while would skip the last thread so send it also
-				((int *) buffer)[0] = iterationThreadAddress;
-				memcpy(buffer + 4, (void *) iterationThreadAddress, OS_THREAD_SIZE);
-				ret = sendwait(bss, clientfd, buffer, 4 + OS_THREAD_SIZE);
-				CHECK_ERROR(ret < 0)
-
-				// Let the client know that no more threads are coming
-				((int *) buffer)[0] = 0;
-				ret = sendwait(bss, clientfd, buffer, 4);
-				CHECK_ERROR(ret < 0)
 
 				break;
 			}
@@ -1441,47 +1420,30 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_SET_DATA_BREAKPOINT: {
-				ret = recvwait(bss, clientfd, buffer, 4 + 3 * 1);
+				// Read the data from the client
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) + sizeof(bool) * 2);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (data breakpoint)");
+
+				// Parse the data and set the breakpoint
 				int bufferIndex = 0;
 				unsigned int address = ((unsigned int *) buffer)[bufferIndex];
-				bufferIndex += 4;
-				bool translate = buffer[bufferIndex++];
-				bool write = buffer[bufferIndex++];
+				bufferIndex += sizeof(int);
 				bool read = buffer[bufferIndex];
-				struct DataBreakpoint dataBreakpoint;
-				dataBreakpoint.value = address;
-				dataBreakpoint.translate = translate;
-				dataBreakpoint.write = write;
-				dataBreakpoint.read = read;
-				setDataAddressBreakpointRegister(dataBreakpoint);
-
-				break;
-			}
-			case COMMAND_GET_DATA_BREAKPOINT: {
-				struct DataBreakpoint dataBreakpoint;
-				getDataAddressBreakpointRegisterContents(dataBreakpoint);
-				int structureSize = sizeof(dataBreakpoint);
-				memcpy(buffer, (const void *) &dataBreakpoint, structureSize);
-				ret = sendwait(bss, clientfd, buffer, structureSize);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (data breakpoint)");
+				bufferIndex += sizeof(bool);
+				bool write = buffer[bufferIndex];
+				bufferIndex += sizeof(bool);
+				setDataAddressBreakPointRegister(address, read, write);
 
 				break;
 			}
 			case COMMAND_SET_INSTRUCTION_BREAKPOINT: {
-				// Read the address and set the breakpoint execute
+				// Read the address
 				ret = recvwait(bss, clientfd, buffer, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (instruction breakpoint)");
-				unsigned int address = ((unsigned int *) buffer)[0];
-				setInstructionAddressBreakpointRegister(address);
 
-				break;
-			}
-			case COMMAND_GET_INSTRUCTION_BREAKPOINT: {
-				int address = getInstructionAddressBreakpointRegister();
-				((int *) buffer)[0] = address;
-				ret = sendwait(bss, clientfd, buffer, sizeof(int));
-				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (instruction breakpoint)");
+				// Parse the address and set the breakpoint
+				unsigned int address = ((unsigned int *) buffer)[0];
+				setInstructionAddressBreakPointRegister(address);
 
 				break;
 			}
@@ -1514,6 +1476,7 @@ static int runTCPGeckoServer(int argc, void *argv) {
 	bss = argv;
 
 	setup_os_exceptions();
+	registerBreakPointHandler();
 	socket_lib_init();
 
 	log_init(COMPUTER_IP_ADDRESS);

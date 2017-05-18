@@ -33,6 +33,7 @@ BUILD		:=	build
 BUILD_DBG	:=	$(TARGET)_dbg
 SOURCES		:=	src \
 				src/dynamic_libs \
+				src/breakpoints \
 				src/game \
 				src/fs \
 				src/kernel \

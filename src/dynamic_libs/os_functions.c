@@ -52,6 +52,12 @@ EXPORT_DECL(int, OSCreateThread, void *thread, s32(*callback)(s32, void * ), s32
 					priority, u32
 					attr);
 
+EXPORT_DECL(void, OSEnableInterrupts, void);
+
+EXPORT_DECL(void, OSSetDABR, int, int, int, int);
+
+EXPORT_DECL(void, OSSetIABR, int, int);
+
 EXPORT_DECL(int, OSGetCurrentThread, void);
 
 EXPORT_DECL(int, OSResumeThread, void *thread);
@@ -279,6 +285,9 @@ void InitOSFunctionPointers(void) {
 	//!----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	//! Thread functions
 	//!----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	OS_FIND_EXPORT(coreinit_handle, OSEnableInterrupts);
+	OS_FIND_EXPORT(coreinit_handle, OSSetDABR);
+	OS_FIND_EXPORT(coreinit_handle, OSSetIABR);
 	OS_FIND_EXPORT(coreinit_handle, OSGetCurrentThread);
 	OS_FIND_EXPORT(coreinit_handle, OSCreateThread);
 	OS_FIND_EXPORT(coreinit_handle, OSResumeThread);
