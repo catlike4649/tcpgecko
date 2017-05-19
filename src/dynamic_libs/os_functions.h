@@ -142,6 +142,14 @@ extern int
 
 extern void (*OSEnableInterrupts)(void);
 
+extern void (*__OSClearAndEnableInterrupt)(void);
+
+extern int (*OSIsInterruptEnabled)(void);
+
+extern int (*OSIsDebuggerPresent)(void);
+
+extern void (*OSRestoreInterrupts)(void);
+
 extern void (*OSSetDABR)(int, int, int, int);
 
 extern void (*OSSetIABR)(int, int);
@@ -222,7 +230,9 @@ extern int (*OSScreenEnableEx)(unsigned int bufferNum, int enable);
 
 typedef unsigned char (*exception_callback)(void *interruptedContext);
 
-extern void (*OSSetExceptionCallback)(u8 exceptionType, exception_callback newCallback);
+extern void (*OSSetExceptionCallback)(u8 exceptionType, exception_callback callback);
+
+extern void (*__OSSetInterruptHandler)(u8 interruptType, exception_callback callback);
 
 extern int (*OSAllocFromSystem)(unsigned int size, unsigned int align);
 

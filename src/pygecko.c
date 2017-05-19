@@ -1285,8 +1285,7 @@ struct pygecko_bss_t *bss;
 static int runTCPGeckoServer(int argc, void *argv) {
 	bss = argv;
 
-	setup_os_exceptions();
-	registerBreakPointHandler();
+	// setup_os_exceptions();
 	socket_lib_init();
 
 	log_init(COMPUTER_IP_ADDRESS);

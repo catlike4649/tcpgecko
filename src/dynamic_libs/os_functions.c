@@ -54,6 +54,14 @@ EXPORT_DECL(int, OSCreateThread, void *thread, s32(*callback)(s32, void * ), s32
 
 EXPORT_DECL(void, OSEnableInterrupts, void);
 
+EXPORT_DECL(void, __OSClearAndEnableInterrupt, void);
+
+EXPORT_DECL(int, OSIsInterruptEnabled, void);
+
+EXPORT_DECL(int, OSIsDebuggerPresent, void);
+
+EXPORT_DECL(void, OSRestoreInterrupts, void);
+
 EXPORT_DECL(void, OSSetDABR, int, int, int, int);
 
 EXPORT_DECL(void, OSSetIABR, int, int);
@@ -109,8 +117,9 @@ EXPORT_DECL(void, __Exit, void);
 
 EXPORT_DECL(void, OSFatal, const char *msg);
 
-EXPORT_DECL(void, OSSetExceptionCallback, u8
-		exceptionType, exception_callback newCallback);
+EXPORT_DECL(void, OSSetExceptionCallback, u8 exceptionType, exception_callback callback);
+
+EXPORT_DECL(void, __OSSetInterruptHandler, u8 exceptionType, exception_callback callback);
 
 EXPORT_DECL(void, DCFlushRange, const void *addr, u32
 		length);
@@ -256,6 +265,7 @@ void InitOSFunctionPointers(void) {
 	OS_FIND_EXPORT(coreinit_handle, OSFatal);
 	OS_FIND_EXPORT(coreinit_handle, OSGetTitleID);
 	OS_FIND_EXPORT(coreinit_handle, OSSetExceptionCallback);
+	OS_FIND_EXPORT(coreinit_handle, __OSSetInterruptHandler);
 	OS_FIND_EXPORT(coreinit_handle, DCFlushRange);
 	OS_FIND_EXPORT(coreinit_handle, ICInvalidateRange);
 	OS_FIND_EXPORT(coreinit_handle, OSEffectiveToPhysical);
@@ -286,6 +296,10 @@ void InitOSFunctionPointers(void) {
 	//! Thread functions
 	//!----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	OS_FIND_EXPORT(coreinit_handle, OSEnableInterrupts);
+	OS_FIND_EXPORT(coreinit_handle, __OSClearAndEnableInterrupt);
+	OS_FIND_EXPORT(coreinit_handle, OSIsInterruptEnabled);
+	OS_FIND_EXPORT(coreinit_handle, OSIsDebuggerPresent);
+	OS_FIND_EXPORT(coreinit_handle, OSRestoreInterrupts);
 	OS_FIND_EXPORT(coreinit_handle, OSSetDABR);
 	OS_FIND_EXPORT(coreinit_handle, OSSetIABR);
 	OS_FIND_EXPORT(coreinit_handle, OSGetCurrentThread);
