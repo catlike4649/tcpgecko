@@ -959,17 +959,24 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			case COMMAND_READ_THREADS: {
 				struct node *threads = getAllThreads();
 				int threadCount = length(threads);
-				struct node* currentThread = threads;
+				log_printf("Thread Count: %i\n", threadCount);
 
 				// Send the thread count
+				log_print("Sending thread count...\n");
 				((int *) buffer)[0] = threadCount;
 				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (thread count)");
 
 				// Send the thread addresses and data
+				struct node* currentThread = threads;
 				while (currentThread != NULL) {
+					int data = (int) currentThread->data;
+					log_printf("Thread data: %08x\n", data);
 					((int *) buffer)[0] = (int) currentThread->data;
 					memcpy(buffer + sizeof(int), currentThread->data, THREAD_SIZE);
+					log_print("Sending node...\n");
 					ret = sendwait(bss, clientfd, buffer, sizeof(int) + THREAD_SIZE);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (thread address and data)")
 
 					currentThread = currentThread->next;
 				}

@@ -34,3 +34,18 @@ int length(struct node *list) {
 
 	return length;
 }
+
+void reverse(struct node **list) {
+	struct node *previous = NULL;
+	struct node *current = *list;
+	struct node *next;
+
+	while (current != NULL) {
+		next = current->next;
+		current->next = previous;
+		previous = current;
+		current = next;
+	}
+
+	*list = previous;
+}
