@@ -15,7 +15,13 @@
 #include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
-#include "breakpoints/breakpoints.h"
+#include "system/breakpoints.h"
+#include "system/threads.h"
+#include "utils/linked_list.h"
+#include "assertions.h"
+#include "kernel.h"
+#include "address.h"
+#include "disassembler.h"
 
 void *client;
 void *commandBlock;
@@ -48,12 +54,11 @@ struct pygecko_bss_t {
 #define COMMAND_GET_CODE_HANDLER_ADDRESS 0x55
 #define COMMAND_READ_THREADS 0x56
 #define COMMAND_ACCOUNT_IDENTIFIER 0x57
-#define COMMAND_WRITE_SCREEN 0x58 // TODO Exception DSI
+// #define COMMAND_WRITE_SCREEN 0x58 // TODO Exception DSI
 #define COMMAND_FOLLOW_POINTER 0x60
 #define COMMAND_REMOTE_PROCEDURE_CALL 0x70
 #define COMMAND_GET_SYMBOL 0x71
 #define COMMAND_MEMORY_SEARCH 0x73
-// #define COMMAND_SYSTEM_CALL 0x80
 #define COMMAND_EXECUTE_ASSEMBLY 0x81
 #define COMMAND_PAUSE_CONSOLE 0x82
 #define COMMAND_RESUME_CONSOLE 0x83
@@ -61,73 +66,22 @@ struct pygecko_bss_t {
 #define COMMAND_SERVER_VERSION 0x99
 #define COMMAND_GET_OS_VERSION 0x9A
 #define COMMAND_SET_DATA_BREAKPOINT 0xA0
-#define COMMAND_GET_DATA_BREAKPOINT 0xA1
 #define COMMAND_SET_INSTRUCTION_BREAKPOINT 0xA2
-#define COMMAND_GET_INSTRUCTION_BREAKPOINT 0xA3
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
-#define COMMAND_IOSUHAX_READ_FILE 0xD0
+#define COMMAND_IOSU_HAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
 #define errno (*__gh_errno_ptr())
-#define MSG_DONTWAIT 32
+#define MSG_DONT_WAIT 32
 #define EWOULDBLOCK 6
 #define DATA_BUFFER_SIZE 0x5000
-#define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
+// #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
 #define SERVER_VERSION "05/24/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
 #define VERSION_HASH 0x39C9444B
-
-#define ASSERT_MINIMUM_HOLDS(actual, minimum, variableName) \
-if(actual < minimum) { \
-    char buffer[100] = {0}; \
-    __os_snprintf(buffer, 100, "%s: Limit exceeded (minimum: %i, actual: %i)", variableName, minimum, actual); \
-    OSFatal(buffer); \
-} \
-
-#define ASSERT_MAXIMUM_HOLDS(maximum, actual, variableName) \
-if(actual > maximum) { \
-    char buffer[100] = {0}; \
-    __os_snprintf(buffer, 100, "%s: Limit exceeded (maximum: %i, actual: %i)", variableName, maximum, actual); \
-    OSFatal(buffer); \
-} \
-
-#define ASSERT_FUNCTION_SUCCEEDED(returnValue, functionName) \
-    if (returnValue < 0) { \
-        char buffer[100] = {0}; \
-        __os_snprintf(buffer, 100, "%s failed with return value: %i", functionName, returnValue); \
-        OSFatal(buffer); \
-    } \
-
-#define ASSERT_VALID_EFFECTIVE_ADDRESS(effectiveAddress, message) \
-    if(!OSIsAddressValid((void *) effectiveAddress)) { \
-    char buffer[100] = {0}; \
-        __os_snprintf(buffer, 100, "Address %04x invalid: %s", effectiveAddress, message); \
-        OSFatal(buffer); \
-    } \
-
-#define ASSERT_INTEGER(actual, expected, name) \
-    if(actual != expected) { \
-        char buffer[50] = {0}; \
-        __os_snprintf(buffer, 50, "%s assertion failed: %i == %i", name, actual, expected); \
-        OSFatal(buffer); \
-    } \
-
-#define ASSERT_STRING(actual, expected) \
-    if(strcmp(actual, expected) != 0) { \
-        char buffer[50] = {0}; \
-        __os_snprintf(buffer, 50, "String assertion failed: \"%s\" == \"%s\"", actual, expected); \
-        OSFatal(buffer); \
-    } \
-
-#define ASSERT_ALLOCATED(variable, name) \
-    if(variable == 0) { \
-        char buffer[50] = {0}; \
-        __os_snprintf(buffer, 50, "%s allocation failed", name); \
-        OSFatal(buffer); \
-    } \
 
 ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
@@ -143,75 +97,20 @@ strm,
 int flush
 ));
 
-/*struct breakpoint {
-	u32 address;
-	u32 instruction;
-};
+// ########## Being kernel_copy.h ############
 
-// 10 general breakpoints + 2 step breakpoints
-breakpoint breakpoints[12];
-
-breakpoint *getBreakpoint(u32 address, int size) {
-	breakpoint *breakpointsList = breakpoints;
-	for (int breakpointIndex = 0; breakpointIndex < size; breakpointIndex++) {
-		if (breakpointsList[breakpointIndex].address == address) {
-			return &breakpointsList[breakpointIndex];
-		}
-	}
-	return 0;
-}*/
-
+// TODO Variable size, not hard-coded
 unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
 void pygecko_memcpy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
 	memcpy(memcpy_buffer, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer,
-						  length);
+	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer, length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
 
-unsigned char *kernelCopyBuffer[4];
+// ########## End kernel_copy.h ############
 
-void kernelCopy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
-	memcpy(kernelCopyBuffer, sourceBuffer, length);
-	unsigned int destinationAddress = (unsigned int) OSEffectiveToPhysical(destinationBuffer);
-	SC0x25_KernelCopyData(destinationAddress, (unsigned int) &kernelCopyBuffer, length);
-	DCFlushRange(destinationBuffer, (u32) length);
-}
-
-#define KERNEL_COPY_SOURCE_ADDRESS 0x10100000
-
-int kernelCopyService(int argc, void *argv) {
-	while (true) {
-		// Read the destination address from the source address
-		int destinationAddress = *(int *) KERNEL_COPY_SOURCE_ADDRESS;
-
-		// Avoid crashing
-		if (OSIsAddressValid((const void *) destinationAddress)) {
-			// Perform memory copy
-			unsigned char *valueBuffer = (unsigned char *) (KERNEL_COPY_SOURCE_ADDRESS + 4);
-			kernelCopy((unsigned char *) destinationAddress, valueBuffer, 4);
-
-			// "Consume" address and value for synchronization with the code handler for instance
-			*(int *) KERNEL_COPY_SOURCE_ADDRESS = 0;
-			*(((int *) KERNEL_COPY_SOURCE_ADDRESS) + 1) = 0;
-		}
-	}
-}
-
-void startKernelCopyService() {
-	unsigned int stack = (unsigned int) memalign(0x40, 0x100);
-	ASSERT_ALLOCATED(stack, "Kernel copy thread stack")
-	stack += 0x100;
-	void *thread = memalign(0x40, 0x1000);
-	ASSERT_ALLOCATED(thread, "Kernel copy thread")
-
-	int status = OSCreateThread(thread, kernelCopyService, 1, NULL, (u32) stack + sizeof(stack), sizeof(stack), 31,
-								OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY | OS_THREAD_ATTR_DETACH);
-	ASSERT_INTEGER(status, 1, "Creating kernel copy thread")
-	// OSSetThreadName(thread, "Kernel Copier");
-	OSResumeThread(thread);
-}
+// ########## Being pause.h ############
 
 int (*AVMGetDRCScanMode)(int);
 
@@ -255,10 +154,9 @@ bool isConsolePaused() {
 	return value == PAUSED;
 }
 
-/*Validates the address range (last address inclusive) but is SLOW on bigger ranges */
-static int validateAddressRange(int starting_address, int ending_address) {
-	return __OSValidateAddressSpaceRange(1, (void *) starting_address, ending_address - starting_address + 1);
-}
+// ########## End pause.h ############
+
+// ########## Being socket_functions.h ############
 
 static int recvwait(struct pygecko_bss_t *bss, int sock, void *buffer, int len) {
 	int ret;
@@ -288,7 +186,7 @@ static int checkbyte(int sock) {
 	unsigned char buffer[1];
 	int ret;
 
-	ret = recv(sock, buffer, 1, MSG_DONTWAIT);
+	ret = recv(sock, buffer, 1, MSG_DONT_WAIT);
 	if (ret < 0) return ret;
 	if (ret == 0) return -1;
 	return buffer[0];
@@ -315,32 +213,6 @@ static int sendByte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 	return sendwait(bss, sock, buffer, 1);
 }
 
-/*void performSystemCall(int value) {
-	// TODO Exception DSI?
-	asm(
-	"li 0, %0\n"
-			"sc\n"
-			"blr\n"
-	: // No output
-	:"r"(value) // Input
-	:"0" // Overwritten register
-	);
-}*/
-
-void writeScreen(char message[100], int secondsDelay) {
-	// TODO Does nothing then crashes (in games)?
-	OSScreenClearBufferEx(0, 0);
-	OSScreenClearBufferEx(1, 0);
-
-	OSScreenPutFontEx(0, 14, 1, message);
-	OSScreenPutFontEx(1, 14, 1, message);
-
-	sleep(secondsDelay);
-
-	OSScreenFlipBuffersEx(0);
-	OSScreenFlipBuffersEx(1);
-}
-
 void receiveString(struct pygecko_bss_t *bss,
 				   int clientfd,
 				   char *stringBuffer,
@@ -359,6 +231,22 @@ void receiveString(struct pygecko_bss_t *bss,
 		OSFatal("String buffer size exceeded");
 	}
 }
+
+// ########## End socket_functions.h ############
+
+/*void writeScreen(char message[100], int secondsDelay) {
+	// TODO Does nothing then crashes (in games)?
+	OSScreenClearBufferEx(0, 0);
+	OSScreenClearBufferEx(1, 0);
+
+	OSScreenPutFontEx(0, 14, 1, message);
+	OSScreenPutFontEx(1, 14, 1, message);
+
+	sleep(secondsDelay);
+
+	OSScreenFlipBuffersEx(0);
+	OSScreenFlipBuffersEx(1);
+}*/
 
 void considerInitializingFileSystem() {
 	if (!client) {
@@ -382,45 +270,6 @@ void considerInitializingFileSystem() {
 	}
 }
 
-char *disassemblerBuffer;
-void *disassemblerBufferPointer;
-#define DISASSEMBLER_BUFFER_SIZE 0x1024
-
-void formatDisassembled(char *format, ...) {
-	if (!disassemblerBuffer) {
-		disassemblerBuffer = malloc(DISASSEMBLER_BUFFER_SIZE);
-		ASSERT_ALLOCATED(disassemblerBuffer, "Disassembler buffer")
-		disassemblerBufferPointer = disassemblerBuffer;
-	}
-
-	va_list variableArguments;
-	va_start(variableArguments, format);
-	char *temporaryBuffer;
-	int printedBytesCount = vasprintf(&temporaryBuffer, format, variableArguments);
-	ASSERT_ALLOCATED(temporaryBuffer, "Temporary buffer")
-	ASSERT_MINIMUM_HOLDS(printedBytesCount, 1, "Printed bytes count")
-	va_end(variableArguments);
-
-	// Do not smash the buffer
-	long projectedSize = (void *) disassemblerBuffer - disassemblerBufferPointer + printedBytesCount;
-	if (projectedSize < DISASSEMBLER_BUFFER_SIZE) {
-		memcpy(disassemblerBuffer, temporaryBuffer, printedBytesCount);
-		disassemblerBuffer += printedBytesCount;
-	}
-
-	free(temporaryBuffer);
-}
-
-bool isValidDataAddress(int address) {
-	return OSIsAddressValid((const void *) address)
-		   && address >= 0x10000000
-		   && address < 0x50000000;
-}
-
-int roundUpToAligned(int number) {
-	return (number + 3) & ~0x03;
-}
-
 #define ERROR_BUFFER_SIZE 150
 
 void reportIllegalCommandByte(int commandByte) {
@@ -429,37 +278,6 @@ void reportIllegalCommandByte(int commandByte) {
 				  "Illegal command byte received: 0x%02x\nServer Version: %s\nIf you see this, you most likely have to update your TCP Gecko Installer.",
 				  commandByte, SERVER_VERSION);
 	OSFatal(errorBuffer);
-}
-
-#define MINIMUM_KERNEL_COMPARE_LENGTH 4
-#define KERNEL_MEMORY_COMPARE_STEP_SIZE 1
-
-int kernelMemoryCompare(const void *sourceBuffer,
-						const void *destinationBuffer,
-						int length) {
-	if (length < MINIMUM_KERNEL_COMPARE_LENGTH) {
-		ASSERT_MINIMUM_HOLDS(length, MINIMUM_KERNEL_COMPARE_LENGTH, "length");
-	}
-
-	bool loopEntered = false;
-
-	while (kern_read(sourceBuffer) == kern_read(destinationBuffer)) {
-		loopEntered = true;
-		sourceBuffer = (char *) sourceBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		destinationBuffer = (char *) destinationBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		length -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-
-		if (length <= MINIMUM_KERNEL_COMPARE_LENGTH - 1) {
-			break;
-		}
-	}
-
-	if (loopEntered) {
-		sourceBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-		destinationBuffer -= KERNEL_MEMORY_COMPARE_STEP_SIZE;
-	}
-
-	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
 }
 
 static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
@@ -1043,7 +861,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			case COMMAND_IOSUHAX_READ_FILE: {
+			case COMMAND_IOSU_HAX_READ_FILE: {
 				log_print("COMMAND_IOSUHAX_READ_FILE");
 
 				// TODO Crashes console on this call
@@ -1139,43 +957,31 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_READ_THREADS: {
-				int OS_THREAD_SIZE = 0x6A0;
+				struct node *threads = getAllThreads();
+				int threadCount = length(threads);
+				log_printf("Thread Count: %i\n", threadCount);
 
-				int currentThreadAddress = OSGetCurrentThread();
-				ASSERT_VALID_EFFECTIVE_ADDRESS(currentThreadAddress, "OSGetCurrentThread")
-				int iterationThreadAddress = currentThreadAddress;
-				int temporaryThreadAddress;
+				// Send the thread count
+				log_print("Sending thread count...\n");
+				((int *) buffer)[0] = threadCount;
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (thread count)");
 
-				// Follow "previous thread" pointers back to the beginning
-				while ((temporaryThreadAddress = *(int *) (iterationThreadAddress + 0x390)) != 0) {
-					iterationThreadAddress = temporaryThreadAddress;
-					ASSERT_VALID_EFFECTIVE_ADDRESS(iterationThreadAddress, "iterationThreadAddress going backwards")
+				// Send the thread addresses and data
+				struct node* currentThread = threads;
+				while (currentThread != NULL) {
+					int data = (int) currentThread->data;
+					log_printf("Thread data: %08x\n", data);
+					((int *) buffer)[0] = (int) currentThread->data;
+					memcpy(buffer + sizeof(int), currentThread->data, THREAD_SIZE);
+					log_print("Sending node...\n");
+					ret = sendwait(bss, clientfd, buffer, sizeof(int) + THREAD_SIZE);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (thread address and data)")
+
+					currentThread = currentThread->next;
 				}
 
-				// Send all threads by following the "next thread" pointers
-				while ((temporaryThreadAddress = *(int *) (iterationThreadAddress + 0x38C)) != 0) {
-					// Send the starting thread's address
-					((int *) buffer)[0] = iterationThreadAddress;
-
-					// Send the thread struct itself
-					memcpy(buffer + 4, (void *) iterationThreadAddress, OS_THREAD_SIZE);
-					ret = sendwait(bss, clientfd, buffer, 4 + OS_THREAD_SIZE);
-					CHECK_ERROR(ret < 0)
-
-					iterationThreadAddress = temporaryThreadAddress;
-					ASSERT_VALID_EFFECTIVE_ADDRESS(iterationThreadAddress, "iterationThreadAddress going forwards")
-				}
-
-				// The previous while would skip the last thread so send it also
-				((int *) buffer)[0] = iterationThreadAddress;
-				memcpy(buffer + 4, (void *) iterationThreadAddress, OS_THREAD_SIZE);
-				ret = sendwait(bss, clientfd, buffer, 4 + OS_THREAD_SIZE);
-				CHECK_ERROR(ret < 0)
-
-				// Let the client know that no more threads are coming
-				((int *) buffer)[0] = 0;
-				ret = sendwait(bss, clientfd, buffer, 4);
-				CHECK_ERROR(ret < 0)
+				destroy(threads);
 
 				break;
 			}
@@ -1212,7 +1018,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			case COMMAND_WRITE_SCREEN: {
+			/*case COMMAND_WRITE_SCREEN: {
 				char message[WRITE_SCREEN_MESSAGE_BUFFER_SIZE];
 				ret = recvwait(bss, clientfd, buffer, 4);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (write screen seconds)")
@@ -1221,7 +1027,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				writeScreen(message, seconds);
 
 				break;
-			}
+			}*/
 			case COMMAND_FOLLOW_POINTER: {
 				ret = recvwait(bss, clientfd, buffer, 8);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (Pointer address and offsets count)")
@@ -1374,16 +1180,6 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-				/*case COMMAND_SYSTEM_CALL: {
-					ret = recvwait(bss, clientfd, buffer, 4);
-					ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (system call)")
-
-					int value = ((int *) buffer)[0];
-
-					performSystemCall(value);
-
-					break;
-				}*/
 			case COMMAND_EXECUTE_ASSEMBLY: {
 				// Receive the assembly
 				receiveString(bss, clientfd, (char *) buffer, DATA_BUFFER_SIZE);
@@ -1441,47 +1237,30 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_SET_DATA_BREAKPOINT: {
-				ret = recvwait(bss, clientfd, buffer, 4 + 3 * 1);
+				// Read the data from the client
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) + sizeof(bool) * 2);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (data breakpoint)");
+
+				// Parse the data and set the breakpoint
 				int bufferIndex = 0;
 				unsigned int address = ((unsigned int *) buffer)[bufferIndex];
-				bufferIndex += 4;
-				bool translate = buffer[bufferIndex++];
-				bool write = buffer[bufferIndex++];
+				bufferIndex += sizeof(int);
 				bool read = buffer[bufferIndex];
-				struct DataBreakpoint dataBreakpoint;
-				dataBreakpoint.value = address;
-				dataBreakpoint.translate = translate;
-				dataBreakpoint.write = write;
-				dataBreakpoint.read = read;
-				setDataAddressBreakpointRegister(dataBreakpoint);
-
-				break;
-			}
-			case COMMAND_GET_DATA_BREAKPOINT: {
-				struct DataBreakpoint dataBreakpoint;
-				getDataAddressBreakpointRegisterContents(dataBreakpoint);
-				int structureSize = sizeof(dataBreakpoint);
-				memcpy(buffer, (const void *) &dataBreakpoint, structureSize);
-				ret = sendwait(bss, clientfd, buffer, structureSize);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (data breakpoint)");
+				bufferIndex += sizeof(bool);
+				bool write = buffer[bufferIndex];
+				bufferIndex += sizeof(bool);
+				setDataAddressBreakPointRegister(address, read, write);
 
 				break;
 			}
 			case COMMAND_SET_INSTRUCTION_BREAKPOINT: {
-				// Read the address and set the breakpoint execute
+				// Read the address
 				ret = recvwait(bss, clientfd, buffer, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (instruction breakpoint)");
-				unsigned int address = ((unsigned int *) buffer)[0];
-				setInstructionAddressBreakpointRegister(address);
 
-				break;
-			}
-			case COMMAND_GET_INSTRUCTION_BREAKPOINT: {
-				int address = getInstructionAddressBreakpointRegister();
-				((int *) buffer)[0] = address;
-				ret = sendwait(bss, clientfd, buffer, sizeof(int));
-				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (instruction breakpoint)");
+				// Parse the address and set the breakpoint
+				unsigned int address = ((unsigned int *) buffer)[0];
+				setInstructionAddressBreakPointRegister(address);
 
 				break;
 			}
@@ -1513,7 +1292,7 @@ struct pygecko_bss_t *bss;
 static int runTCPGeckoServer(int argc, void *argv) {
 	bss = argv;
 
-	setup_os_exceptions();
+	// setup_os_exceptions();
 	socket_lib_init();
 
 	log_init(COMPUTER_IP_ADDRESS);
