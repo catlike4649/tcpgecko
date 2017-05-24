@@ -74,11 +74,11 @@ struct pygecko_bss_t {
 #define EWOULDBLOCK 6
 #define DATA_BUFFER_SIZE 0x5000
 #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "05/04/2017"
+#define SERVER_VERSION "05/24/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
-#define VERSION_HASH 0x3516D3B9
+#define VERSION_HASH 0x39C9444B
 
 #define ASSERT_MINIMUM_HOLDS(actual, minimum, variableName) \
 if(actual < minimum) { \
