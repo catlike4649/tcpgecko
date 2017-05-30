@@ -17,7 +17,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <gctypes.h>
-#include "common/common.h"
+#include "../common/common.h"
 #include "memory_area_table.h"
 
 typedef struct _memory_values_t

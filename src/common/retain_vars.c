@@ -1,4 +1,6 @@
 #include <gctypes.h>
+#include "fs_defs.h"
+
 u8 gSettingLaunchPyGecko __attribute__((section(".data"))) = 0;
 u8 gSettingUseUpdatepath __attribute__((section(".data"))) = 0;
 u8 gSettingPadconMode __attribute__((section(".data"))) = 0;

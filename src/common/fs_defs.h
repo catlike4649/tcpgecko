@@ -2,11 +2,11 @@
 #define	FS_DEFS_H
 
 #include "types.h"
+#include "kernel_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /* FS defines and types */
 #define FS_MAX_LOCALPATH_SIZE           511
@@ -30,7 +30,6 @@ extern "C" {
 #define FS_MAX_ENTNAME_SIZE             256
 
 #define FS_SOURCETYPE_EXTERNAL          0
-#define FS_SOURCETYPE_HFIO              1
 #define FS_SOURCETYPE_HFIO              1
 /* FS data buffer alignment */
 #define FS_IO_BUFFER_ALIGN              64

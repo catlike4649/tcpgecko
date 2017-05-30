@@ -22,6 +22,7 @@
  * distribution.
  ***************************************************************************/
 #include "os_functions.h"
+#include "../common/fs_defs.h"
 
 EXPORT_DECL(s32, AOC_Initialize, void);
 EXPORT_DECL(s32, AOC_Finalize, void);

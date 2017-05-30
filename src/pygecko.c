@@ -12,16 +12,12 @@
 #include "dynamic_libs/gx2_functions.h"
 #include "kernel/syscalls.h"
 #include "dynamic_libs/fs_functions.h"
-#include "system/exception_handler.h"
 #include "utils/logger.h"
 #include "system/memory.h"
-#include "system/breakpoints.h"
-#include "system/threads.h"
+#include "system/hardware_breakpoints.h"
 #include "utils/linked_list.h"
-#include "assertions.h"
-#include "kernel.h"
 #include "address.h"
-#include "disassembler.h"
+#include "system/stack.h"
 
 void *client;
 void *commandBlock;
@@ -58,7 +54,8 @@ struct pygecko_bss_t {
 #define COMMAND_FOLLOW_POINTER 0x60
 #define COMMAND_REMOTE_PROCEDURE_CALL 0x70
 #define COMMAND_GET_SYMBOL 0x71
-#define COMMAND_MEMORY_SEARCH 0x73
+#define COMMAND_MEMORY_SEARCH 0x72
+#define COMMAND_ADVANCED_MEMORY_SEARCH 0x73
 #define COMMAND_EXECUTE_ASSEMBLY 0x81
 #define COMMAND_PAUSE_CONSOLE 0x82
 #define COMMAND_RESUME_CONSOLE 0x83
@@ -67,6 +64,10 @@ struct pygecko_bss_t {
 #define COMMAND_GET_OS_VERSION 0x9A
 #define COMMAND_SET_DATA_BREAKPOINT 0xA0
 #define COMMAND_SET_INSTRUCTION_BREAKPOINT 0xA2
+#define COMMAND_TOGGLE_BREAKPOINT 0xA5
+#define COMMAND_REMOVE_ALL_BREAKPOINTS 0xA6
+#define COMMAND_POKE_REGISTERS 0xA7
+#define COMMAND_GET_STACK_TRACE 0xA8
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSU_HAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
@@ -104,7 +105,8 @@ unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
 
 void pygecko_memcpy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
 	memcpy(memcpy_buffer, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer, length);
+	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer,
+						  length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
 
@@ -121,7 +123,7 @@ unsigned long getConsoleStatePatchAddress() {
 		// Acquire the RPL and function
 		log_print("Acquiring...\n");
 		unsigned int avm_handle;
-		OSDynLoad_Acquire("avm.rpl", (u32 * ) & avm_handle);
+		OSDynLoad_Acquire("avm.rpl", (u32 *) &avm_handle);
 		ASSERT_ALLOCATED(avm_handle, "avm.rpl")
 		OSDynLoad_FindExport((u32) avm_handle, 0, "AVMGetDRCScanMode", &AVMGetDRCScanMode);
 		ASSERT_ALLOCATED(AVMGetDRCScanMode, "AVMGetDRCScanMode")
@@ -405,7 +407,6 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
 						CHECK_ERROR(ret < 0)
 					} else {
-						// TODO Compression of ptr, sending of status, compressed size and data, length: 1 + 4 + len(data)
 						buffer[0] = NON_ZEROS_READ;
 
 						if (useKernRead) {
@@ -968,7 +969,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (thread count)");
 
 				// Send the thread addresses and data
-				struct node* currentThread = threads;
+				struct node *currentThread = threads;
 				while (currentThread != NULL) {
 					int data = (int) currentThread->data;
 					log_printf("Thread data: %08x\n", data);
@@ -1018,16 +1019,16 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			/*case COMMAND_WRITE_SCREEN: {
-				char message[WRITE_SCREEN_MESSAGE_BUFFER_SIZE];
-				ret = recvwait(bss, clientfd, buffer, 4);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (write screen seconds)")
-				int seconds = ((int *) buffer)[0];
-				receiveString(bss, clientfd, message, WRITE_SCREEN_MESSAGE_BUFFER_SIZE);
-				writeScreen(message, seconds);
+				/*case COMMAND_WRITE_SCREEN: {
+					char message[WRITE_SCREEN_MESSAGE_BUFFER_SIZE];
+					ret = recvwait(bss, clientfd, buffer, 4);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (write screen seconds)")
+					int seconds = ((int *) buffer)[0];
+					receiveString(bss, clientfd, message, WRITE_SCREEN_MESSAGE_BUFFER_SIZE);
+					writeScreen(message, seconds);
 
-				break;
-			}*/
+					break;
+				}*/
 			case COMMAND_FOLLOW_POINTER: {
 				ret = recvwait(bss, clientfd, buffer, 8);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (Pointer address and offsets count)")
@@ -1130,6 +1131,27 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_MEMORY_SEARCH: {
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 3);
+				CHECK_ERROR(ret < 0);
+				int address = ((int *) buffer)[0];
+				int value = ((int *) buffer)[1];
+				int length = ((int *) buffer)[2];
+				int index;
+				int foundAddress = 0;
+				for (index = address; index < address + length; index += sizeof(int)) {
+					if (*(int *) index == value) {
+						foundAddress = index;
+						break;
+					}
+				}
+
+				((int *) buffer)[0] = foundAddress;
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				CHECK_ERROR(ret < 0)
+
+				break;
+			}
+			case COMMAND_ADVANCED_MEMORY_SEARCH: {
 				// Receive the initial data
 				ret = recvwait(bss, clientfd, buffer, 4 * 6);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (memory search information)")
@@ -1264,6 +1286,57 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
+			case COMMAND_TOGGLE_BREAKPOINT: {
+				// Read the address
+				ret = recvwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (toggle breakpoint)");
+				u32 address = ((unsigned int *) buffer)[0];
+
+				struct Breakpoint *breakpoint = getBreakpoint(address, GENERAL_BREAKPOINTS_COUNT);
+
+				if (breakpoint != NULL) {
+					breakpoint = removeBreakpoint(breakpoint);
+				} else {
+					breakpoint = allocateBreakpoint();
+
+					if (breakpoint != NULL) {
+						breakpoint = setBreakpoint(breakpoint, address);
+					}
+				}
+
+				break;
+			}
+			case COMMAND_REMOVE_ALL_BREAKPOINTS: {
+				removeAllBreakpoints();
+				break;
+			}
+			case COMMAND_GET_STACK_TRACE: {
+				log_print("Getting stack trace...\n");
+				struct node *stackTrace = getStackTrace(NULL);
+				int stackTraceLength = length(stackTrace);
+
+				// Let the client know the length beforehand
+				int bufferIndex = 0;
+				((int *) buffer)[bufferIndex++] = stackTraceLength;
+
+				struct node *currentStackTraceElement = stackTrace;
+				while (currentStackTraceElement != NULL) {
+					int address = (int) currentStackTraceElement->data;
+					log_printf("Stack trace element address: %08x\n", address);
+					((int *) buffer)[bufferIndex++] = (int) currentStackTraceElement->data;
+
+					currentStackTraceElement = currentStackTraceElement->next;
+				}
+
+				log_printf("Sending stack trace with length %i\n", stackTraceLength);
+				ret = sendwait(bss, clientfd, buffer, sizeof(int) + stackTraceLength);
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (stack trace)");
+
+				break;
+			}
+			case COMMAND_POKE_REGISTERS: {
+
+			}
 			case COMMAND_RUN_KERNEL_COPY_SERVICE: {
 				if (!kernelCopyServiceStarted) {
 					kernelCopyServiceStarted = true;
@@ -1290,9 +1363,9 @@ struct sockaddr_in socketAddress;
 struct pygecko_bss_t *bss;
 
 static int runTCPGeckoServer(int argc, void *argv) {
-	bss = argv;
+	bss = (struct pygecko_bss_t *) argv;
 
-	// setup_os_exceptions();
+	setup_os_exceptions();
 	socket_lib_init();
 
 	log_init(COMPUTER_IP_ADDRESS);
@@ -1307,17 +1380,17 @@ static int runTCPGeckoServer(int argc, void *argv) {
 		CHECK_ERROR(sockfd == -1)
 
 		log_printf("bind()...\n");
-		ret = bind(sockfd, (void *) &socketAddress, 16);
+		ret = bind(sockfd, (struct sockaddr *) &socketAddress, (s32) 16);
 		CHECK_ERROR(ret < 0)
 
 		log_printf("listen()...\n");
-		ret = listen(sockfd, 20);
+		ret = listen(sockfd, (s32) 20);
 		CHECK_ERROR(ret < 0)
 
 		while (true) {
 			log_printf("accept()...\n");
 			len = 16;
-			clientfd = accept(sockfd, (void *) &socketAddress, &len);
+			clientfd = accept(sockfd, (struct sockaddr *) &socketAddress, (s32 * ) & len);
 			CHECK_ERROR(clientfd == -1)
 			log_printf("commands()...\n");
 			ret = processCommands(bss, clientfd);

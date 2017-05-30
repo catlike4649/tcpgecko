@@ -133,12 +133,12 @@ static unsigned char isi_exception_cb(void *context) {
 	return exceptionCallback(context, 1);
 }
 
-static unsigned char program_exception_cb(void *context) {
+unsigned char program_exception_cb(void *context) {
 	return exceptionCallback(context, 2);
 }
 
 void setup_os_exceptions() {
 	OSSetExceptionCallback(OS_EXCEPTION_DSI, &dsi_exception_cb);
 	OSSetExceptionCallback(OS_EXCEPTION_ISI, &isi_exception_cb);
-	OSSetExceptionCallback(OS_EXCEPTION_PROGRAM, &program_exception_cb);
+	// OSSetExceptionCallback(OS_EXCEPTION_PROGRAM, &program_exception_cb);
 }

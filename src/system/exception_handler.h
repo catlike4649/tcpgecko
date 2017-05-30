@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "../utils/stringify.h"
+#include "../common/kernel_types.h"
 
 #define OS_EXCEPTION_DSI                        2
 #define OS_EXCEPTION_ISI                        3

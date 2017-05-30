@@ -26,6 +26,7 @@
 
 #include <gctypes.h>
 #include "common/os_defs.h"
+// #include "../cafe.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -148,6 +149,8 @@ extern int (*OSIsInterruptEnabled)(void);
 
 extern int (*OSIsDebuggerPresent)(void);
 
+// extern bool (*OSSendMessage)(struct OSMessageQueue*, struct OSMessage*, s32);
+
 extern void (*OSRestoreInterrupts)(void);
 
 extern void (*OSSetDABR)(int, int, int, int);
@@ -231,6 +234,8 @@ extern int (*OSScreenEnableEx)(unsigned int bufferNum, int enable);
 typedef unsigned char (*exception_callback)(void *interruptedContext);
 
 extern void (*OSSetExceptionCallback)(u8 exceptionType, exception_callback callback);
+
+extern void (*OSSetExceptionCallbackEx)(u8 exceptionMode, u8 exceptionType, exception_callback callback);
 
 extern void (*__OSSetInterruptHandler)(u8 interruptType, exception_callback callback);
 

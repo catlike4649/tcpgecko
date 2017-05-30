@@ -62,6 +62,8 @@ EXPORT_DECL(int, OSIsDebuggerPresent, void);
 
 EXPORT_DECL(void, OSRestoreInterrupts, void);
 
+// EXPORT_DECL(bool, OSSendMessage, struct OSMessageQueue* mq, struct OSMessage* msg, s32 flags);
+
 EXPORT_DECL(void, OSSetDABR, int, int, int, int);
 
 EXPORT_DECL(void, OSSetIABR, int, int);
@@ -118,6 +120,8 @@ EXPORT_DECL(void, __Exit, void);
 EXPORT_DECL(void, OSFatal, const char *msg);
 
 EXPORT_DECL(void, OSSetExceptionCallback, u8 exceptionType, exception_callback callback);
+
+EXPORT_DECL(void, OSSetExceptionCallbackEx, u8 exceptionMode, u8 exceptionType, exception_callback callback);
 
 EXPORT_DECL(void, __OSSetInterruptHandler, u8 exceptionType, exception_callback callback);
 
@@ -265,6 +269,7 @@ void InitOSFunctionPointers(void) {
 	OS_FIND_EXPORT(coreinit_handle, OSFatal);
 	OS_FIND_EXPORT(coreinit_handle, OSGetTitleID);
 	OS_FIND_EXPORT(coreinit_handle, OSSetExceptionCallback);
+	OS_FIND_EXPORT(coreinit_handle, OSSetExceptionCallbackEx);
 	OS_FIND_EXPORT(coreinit_handle, __OSSetInterruptHandler);
 	OS_FIND_EXPORT(coreinit_handle, DCFlushRange);
 	OS_FIND_EXPORT(coreinit_handle, ICInvalidateRange);
@@ -300,6 +305,7 @@ void InitOSFunctionPointers(void) {
 	OS_FIND_EXPORT(coreinit_handle, OSIsInterruptEnabled);
 	OS_FIND_EXPORT(coreinit_handle, OSIsDebuggerPresent);
 	OS_FIND_EXPORT(coreinit_handle, OSRestoreInterrupts);
+	// OS_FIND_EXPORT(coreinit_handle, OSSendMessage);
 	OS_FIND_EXPORT(coreinit_handle, OSSetDABR);
 	OS_FIND_EXPORT(coreinit_handle, OSSetIABR);
 	OS_FIND_EXPORT(coreinit_handle, OSGetCurrentThread);
