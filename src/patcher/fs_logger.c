@@ -2,7 +2,6 @@
 #include "common/common.h"
 #include "../dynamic_libs/os_functions.h"
 #include "../dynamic_libs/socket_functions.h"
-#include "function_hooks.h"
 #include "fs_logger.h"
 #include "utils/utils.h"
 

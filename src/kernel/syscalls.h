@@ -6,7 +6,6 @@ extern "C" {
 #endif
 
 #include <gctypes.h>
-#include "common/kernel_defs.h"
 #include "../common/kernel_defs.h"
 
 void KernelSetupSyscalls(void);

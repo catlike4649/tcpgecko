@@ -95,4 +95,4 @@ extern int (*inet_aton)(const char *cp, struct in_addr *inp);
 }
 #endif
 
-#endif // __SOCKET_FUNCTIONS_H_
+#endif

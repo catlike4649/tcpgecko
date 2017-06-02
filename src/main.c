@@ -10,20 +10,27 @@
 #include "dynamic_libs/sys_functions.h"
 #include "dynamic_libs/vpad_functions.h"
 #include "dynamic_libs/socket_functions.h"
-#include "patcher/function_hooks.h"
 #include "kernel/kernel_functions.h"
 #include "system/memory.h"
 #include "common/common.h"
 #include "main.h"
 #include "code_handler.h"
+#include "utils/logger.h"
+#include "utils/function_patcher.h"
+#include "patcher/function_patcher_gx2.h"
 
 bool isCodeHandlerInstalled;
 
 #define PRINT_TEXT2(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
 
 typedef enum {
-	EXIT = 0x0, TCP_GECKO = 0x1
+	EXIT,
+	TCP_GECKO
 } LaunchMethod;
+
+void applyFunctionPatches() {
+	patchIndividualMethodHooks(method_hooks_gx2, method_hooks_size_gx2, method_calls_gx2);
+}
 
 /* Entry point */
 int Menu_Main(void) {
@@ -36,6 +43,10 @@ int Menu_Main(void) {
 	InitFSFunctionPointers();
 	InitVPadFunctionPointers();
 	InitSysFunctionPointers();
+
+	log_init(COMPUTER_IP_ADDRESS);
+	log_print("Patching functions\n");
+	applyFunctionPatches();
 
 	if (strcasecmp("men.rpx", cosAppXmlInfoStruct.rpx_name) == 0) {
 		return EXIT_RELAUNCH_ON_LOAD;
@@ -73,7 +84,7 @@ int Menu_Main(void) {
 	);
 
 	SetupKernelCallback();
-	PatchMethodHooks();
+	// PatchMethodHooks();
 
 	memoryInitialize();
 
@@ -143,7 +154,8 @@ int Menu_Main(void) {
 		}
 
 		// Button pressed ?
-		update_screen = (pressedButtons & (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN)) ? 1 : 0;
+		update_screen = (pressedButtons & (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN))
+						? 1 : 0;
 		usleep(20 * 1000);
 	}
 
@@ -156,7 +168,7 @@ int Menu_Main(void) {
 	memoryRelease();
 
 	if (launchMethod == EXIT) {
-		RestoreInstructions();
+		// RestoreInstructions();
 		return EXIT_SUCCESS;
 	} else {
 		SYSLaunchMenu();

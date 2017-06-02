@@ -78,7 +78,7 @@ struct pygecko_bss_t {
 #define EWOULDBLOCK 6
 #define DATA_BUFFER_SIZE 0x5000
 // #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "05/24/2017"
+#define SERVER_VERSION "06/02/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
@@ -378,7 +378,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_READ_MEMORY_KERNEL: {
 				const unsigned char *startingAddress, *endingAddress, *useKernRead;
-				ret = recvwait(bss, clientfd, buffer, 3 * 4);
+				ret = recvwait(bss, clientfd, buffer, 3 * sizeof(int));
 				CHECK_ERROR(ret < 0)
 				startingAddress = ((const unsigned char **) buffer)[0];
 				endingAddress = ((const unsigned char **) buffer)[1];
@@ -395,7 +395,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					// Figure out if all bytes are zero to possibly avoid sending them
 					int rangeIterationIndex = 0;
 					for (; rangeIterationIndex < length; rangeIterationIndex++) {
-						int character = useKernRead ? kern_read(startingAddress + rangeIterationIndex)
+						int character = useKernRead ? readKernelMemory(startingAddress + rangeIterationIndex)
 													: startingAddress[rangeIterationIndex];
 						if (character != 0) {
 							break;
@@ -407,11 +407,12 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
 						CHECK_ERROR(ret < 0)
 					} else {
+						// Send the real bytes now
 						buffer[0] = NON_ZEROS_READ;
 
 						if (useKernRead) {
-							for (int offset = 0; offset < length; offset += 4) {
-								*((int *) (buffer + 1) + offset / 4) = kern_read(startingAddress + offset);
+							for (int offset = 0; offset < length; offset += sizeof(int)) {
+								*((int *) (buffer + 1) + offset / sizeof(int)) = readKernelMemory(startingAddress + offset);
 							}
 						} else {
 							memcpy(buffer + 1, startingAddress, length);
@@ -601,26 +602,26 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_KERNEL_WRITE: {
 				void *ptr, *value;
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 
 				ptr = ((void **) buffer)[0];
 				value = ((void **) buffer)[1];
 
-				kern_write(ptr, (uint32_t) value);
+				writeKernelMemory(ptr, (uint32_t) value);
 				break;
 			}
 			case COMMAND_KERNEL_READ: {
 				void *ptr, *value;
-				ret = recvwait(bss, clientfd, buffer, 4);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int));
 				CHECK_ERROR(ret < 0);
 
 				ptr = ((void **) buffer)[0];
 
-				value = (void *) kern_read(ptr);
+				value = (void *) readKernelMemory(ptr);
 
 				*(void **) buffer = value;
-				sendwait(bss, clientfd, buffer, 4);
+				sendwait(bss, clientfd, buffer, sizeof(int));
 				break;
 			}
 			case COMMAND_TAKE_SCREEN_SHOT: {
@@ -1271,7 +1272,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				bufferIndex += sizeof(bool);
 				bool write = buffer[bufferIndex];
 				bufferIndex += sizeof(bool);
-				setDataAddressBreakPointRegister(address, read, write);
+				setDataBreakpoint(address, read, write);
 
 				break;
 			}
@@ -1282,7 +1283,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				// Parse the address and set the breakpoint
 				unsigned int address = ((unsigned int *) buffer)[0];
-				setInstructionAddressBreakPointRegister(address);
+				setInstructionBreakpoint(address);
 
 				break;
 			}

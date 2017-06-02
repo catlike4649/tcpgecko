@@ -29,6 +29,7 @@ extern "C" {
 #endif
 
 #include "gx2_types.h"
+#include "../common/fs_defs.h"
 
 void InitGX2FunctionPointers(void);
 
