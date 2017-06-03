@@ -35,7 +35,31 @@ typedef struct OSContext {
 	uint32_t exception_specific0;
 	uint32_t exception_specific1;
 
-	/* There is actually a lot more here but we don't need the rest*/
+	u32 exception_type;
+	u32 reserved;
+
+	double fpscr;
+	double fpr[32];
+
+	u16 spinLockCount;
+	u16 state;
+
+	u32 gqr[8];
+	u32 pir;
+	double psf[32];
+
+	u64 coretime[3];
+	u64 starttime;
+
+	u32 error;
+	u32 attributes;
+
+	u32 pmc1;
+	u32 pmc2;
+	u32 pmc3;
+	u32 pmc4;
+	u32 mmcr0;
+	u32 mmcr1;
 } OSContext;
 
 #define CPU_STACK_TRACE_DEPTH        10

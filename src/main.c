@@ -44,10 +44,6 @@ int Menu_Main(void) {
 	InitVPadFunctionPointers();
 	InitSysFunctionPointers();
 
-	log_init(COMPUTER_IP_ADDRESS);
-	log_print("Patching functions\n");
-	applyFunctionPatches();
-
 	if (strcasecmp("men.rpx", cosAppXmlInfoStruct.rpx_name) == 0) {
 		return EXIT_RELAUNCH_ON_LOAD;
 	} else if (strlen(cosAppXmlInfoStruct.rpx_name) > 0 &&
@@ -141,15 +137,20 @@ int Menu_Main(void) {
 			break;
 		}
 
-		// A Button
+		// A Button pressed
 		if (pressedButtons & VPAD_BUTTON_A) {
 			unsigned int physicalCodeHandlerAddress = (unsigned int) OSEffectiveToPhysical(
 					(void *) CODE_HANDLER_INSTALL_ADDRESS);
-			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (int) codeHandler, codeHandlerLength);
+			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (unsigned int) codeHandler, codeHandlerLength);
 			DCFlushRange((const void *) CODE_HANDLER_INSTALL_ADDRESS, (u32) codeHandlerLength);
 
 			isCodeHandlerInstalled = true;
 			launchMethod = TCP_GECKO;
+
+			log_init(COMPUTER_IP_ADDRESS);
+			log_print("Patching functions\n");
+			applyFunctionPatches();
+
 			break;
 		}
 

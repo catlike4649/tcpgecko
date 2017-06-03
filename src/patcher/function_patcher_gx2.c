@@ -24,8 +24,7 @@
 
 static volatile int executionCounter = 0;
 
-declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *colorBuffer, s32
-		scan_target) {
+declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *colorBuffer, s32 scan_target) {
 	if (executionCounter > 120) {
 		GX2Surface surface = colorBuffer->surface;
 		/*s32 format = surface.format;
@@ -53,8 +52,7 @@ declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *
 			jpeg.img_id = 0;
 		}*/
 
-		log_printf("GX2CopyColorBufferToScanBuffer {surface width:%d, height:%d, image size:%d, image data:%x}\n",
-				   surface.width, surface.height, surface.image_size, surface.image_data);
+		log_printf("GX2CopyColorBufferToScanBuffer {surface width:%d, height:%d, image size:%d, image data:%x}\n", surface.width, surface.height, surface.image_size, surface.image_data);
 
 		executionCounter = 0;
 	}
@@ -65,7 +63,7 @@ declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *
 }
 
 FunctionHook method_hooks_gx2[] __attribute__((section(".data"))) = {
-		makeFunctionHook(GX2CopyColorBufferToScanBuffer, LIB_GX2, STATIC_FUNCTION)
+		// makeFunctionHook(GX2CopyColorBufferToScanBuffer, LIB_GX2, STATIC_FUNCTION)
 };
 
 u32 method_hooks_size_gx2 __attribute__((section(".data"))) = sizeof(method_hooks_gx2) / sizeof(FunctionHook);

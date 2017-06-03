@@ -2,7 +2,7 @@
 #include "dynamic_libs/gx2_functions.h"
 #include "dynamic_libs/socket_functions.h"
 #include "common/common.h"
-#include "pygecko.h"
+#include "tcp_gecko.h"
 #include "main.h"
 #include "utils/logger.h"
 #include "title.h"

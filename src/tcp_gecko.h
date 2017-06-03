@@ -1,15 +1,13 @@
-#ifndef _PYGECKO_H_
-#define _PYGECKO_H_
+#pragma once
 
-/* Main */
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define DATA_BUFFER_SIZE 0x5000
 
 void startTCPGecko(void);
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

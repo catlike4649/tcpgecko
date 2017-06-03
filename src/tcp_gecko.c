@@ -1,3 +1,4 @@
+#include "tcp_gecko.h"
 #include <iosuhax.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -10,7 +11,6 @@
 #include "main.h"
 #include "dynamic_libs/socket_functions.h"
 #include "dynamic_libs/gx2_functions.h"
-#include "kernel/syscalls.h"
 #include "dynamic_libs/fs_functions.h"
 #include "utils/logger.h"
 #include "system/memory.h"
@@ -18,6 +18,7 @@
 #include "utils/linked_list.h"
 #include "address.h"
 #include "system/stack.h"
+#include "pause.h"
 
 void *client;
 void *commandBlock;
@@ -68,6 +69,7 @@ struct pygecko_bss_t {
 #define COMMAND_REMOVE_ALL_BREAKPOINTS 0xA6
 #define COMMAND_POKE_REGISTERS 0xA7
 #define COMMAND_GET_STACK_TRACE 0xA8
+#define COMMAND_GET_ENTRY_POINT_ADDRESS 0xB1
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSU_HAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
@@ -76,13 +78,12 @@ struct pygecko_bss_t {
 #define errno (*__gh_errno_ptr())
 #define MSG_DONT_WAIT 32
 #define EWOULDBLOCK 6
-#define DATA_BUFFER_SIZE 0x5000
 // #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
-#define SERVER_VERSION "06/02/2017"
+#define SERVER_VERSION "06/03/2017"
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
-#define VERSION_HASH 0x39C9444B
+#define VERSION_HASH 0x3AC9444B
 
 ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
@@ -100,61 +101,11 @@ int flush
 
 // ########## Being kernel_copy.h ############
 
-// TODO Variable size, not hard-coded
-unsigned char *memcpy_buffer[DATA_BUFFER_SIZE];
-
-void pygecko_memcpy(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
-	memcpy(memcpy_buffer, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &memcpy_buffer,
-						  length);
-	DCFlushRange(destinationBuffer, (u32) length);
-}
-
 // ########## End kernel_copy.h ############
 
-// ########## Being pause.h ############
+// ########## Begin pause.h ############
 
-int (*AVMGetDRCScanMode)(int);
 
-unsigned long getConsoleStatePatchAddress() {
-	if (AVMGetDRCScanMode) {
-		log_print("Already acquired!\n");
-	} else {
-		// Acquire the RPL and function
-		log_print("Acquiring...\n");
-		unsigned int avm_handle;
-		OSDynLoad_Acquire("avm.rpl", (u32 *) &avm_handle);
-		ASSERT_ALLOCATED(avm_handle, "avm.rpl")
-		OSDynLoad_FindExport((u32) avm_handle, 0, "AVMGetDRCScanMode", &AVMGetDRCScanMode);
-		ASSERT_ALLOCATED(AVMGetDRCScanMode, "AVMGetDRCScanMode")
-		log_print("Acquired!\n");
-	}
-
-	return (unsigned long) (AVMGetDRCScanMode + 0x44);
-}
-
-typedef enum {
-	PAUSED = 0x38000001, RUNNING = 0x38000000
-} ConsoleState;
-
-void writeConsoleState(ConsoleState state) {
-	// Get the value to write
-	int patchValue = state;
-	log_printf("Patch value: %x\n", patchValue);
-
-	// Write the value
-	unsigned int patchAddress = getConsoleStatePatchAddress();
-	log_printf("Patch address: %x\n", patchAddress);
-	pygecko_memcpy((unsigned char *) patchAddress, (unsigned char *) &patchValue, 4);
-}
-
-bool isConsolePaused() {
-	unsigned int patchAddress = getConsoleStatePatchAddress();
-	log_printf("Patch address: %x\n", patchAddress);
-	int value = *(unsigned int *) patchAddress;
-
-	return value == PAUSED;
-}
 
 // ########## End pause.h ############
 
@@ -327,7 +278,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				destinationAddress = ((int *) buffer)[0];
 				value = ((int *) buffer)[1];
 
-				pygecko_memcpy((unsigned char *) destinationAddress, (unsigned char *) &value, 4);
+				kernelCopyData((unsigned char *) destinationAddress, (unsigned char *) &value, 4);
 				break;
 			}
 			case COMMAND_READ_MEMORY: {
@@ -374,15 +325,18 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 					startingAddress += length;
 				}
+
 				break;
 			}
 			case COMMAND_READ_MEMORY_KERNEL: {
 				const unsigned char *startingAddress, *endingAddress, *useKernRead;
 				ret = recvwait(bss, clientfd, buffer, 3 * sizeof(int));
-				CHECK_ERROR(ret < 0)
-				startingAddress = ((const unsigned char **) buffer)[0];
-				endingAddress = ((const unsigned char **) buffer)[1];
-				useKernRead = ((const unsigned char **) buffer)[2];
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (receiving data)")
+
+				int bufferIndex = 0;
+				startingAddress = ((const unsigned char **) buffer)[bufferIndex++];
+				endingAddress = ((const unsigned char **) buffer)[bufferIndex++];
+				useKernRead = ((const unsigned char **) buffer)[bufferIndex];
 
 				while (startingAddress != endingAddress) {
 					int length = (int) (endingAddress - startingAddress);
@@ -407,12 +361,11 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
 						CHECK_ERROR(ret < 0)
 					} else {
-						// Send the real bytes now
 						buffer[0] = NON_ZEROS_READ;
 
 						if (useKernRead) {
-							for (int offset = 0; offset < length; offset += sizeof(int)) {
-								*((int *) (buffer + 1) + offset / sizeof(int)) = readKernelMemory(startingAddress + offset);
+							for (int offset = 0; offset < length; offset += 4) {
+								*((int *) (buffer + 1) + offset / 4) = readKernelMemory(startingAddress + offset);
 							}
 						} else {
 							memcpy(buffer + 1, startingAddress, length);
@@ -430,6 +383,77 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					startingAddress += length;
 				}
 				break;
+
+/*				const unsigned char *startingAddress, *endingAddress, *useKernRead;
+				ret = recvwait(bss, clientfd, buffer, 3 * sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (receiving data)")
+
+				int bufferIndex = 0;
+				startingAddress = ((const unsigned char **) buffer)[bufferIndex++];
+				endingAddress = ((const unsigned char **) buffer)[bufferIndex++];
+				useKernRead = ((const unsigned char **) buffer)[bufferIndex];
+
+				while (startingAddress != endingAddress) {
+					log_printf("Reading memory from %08x to %08x with kernel %i\n", startingAddress, endingAddress,
+							   useKernRead);
+
+					unsigned int length = (unsigned int) (endingAddress - startingAddress);
+
+					// Do not smash the buffer
+					if (length > DATA_BUFFER_SIZE) {
+						length = DATA_BUFFER_SIZE;
+					}
+
+					// Figure out if all bytes are zero to possibly avoid sending them
+					log_print("Checking for all zero bytes...\n");
+					unsigned int rangeIterationIndex = 0;
+					for (; rangeIterationIndex < length; rangeIterationIndex++) {
+						int character = useKernRead ? readKernelMemory(startingAddress + rangeIterationIndex)
+													: startingAddress[rangeIterationIndex];
+						if (character != 0) {
+							break;
+						}
+					}
+
+					log_print("Preparing to send...\n");
+					if (rangeIterationIndex == length) {
+						// No need to send all zero bytes for performance
+						log_print("All zero...\n");
+						ret = sendByte(bss, clientfd, ONLY_ZEROS_READ);
+						ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (only zero bytes read byte)")
+						log_print("Sent!\n");
+					} else {
+						// Send the real bytes now
+						log_print("Real bytes...\n");
+						buffer[0] = NON_ZEROS_READ;
+
+						if (useKernRead) {
+							// kernelCopy(buffer + 1, (unsigned char *) startingAddress, length);
+							for (unsigned int offset = 0; offset < length; offset += sizeof(int)) {
+								*((int *) (buffer + 1) + offset / sizeof(int)) = readKernelMemory(
+										startingAddress + offset);
+								log_printf("Offset: %x\n", offset);
+							}
+
+							log_print("Done kernel reading!\n");
+						} else {
+							log_print("Memory copying...\n");
+							memcpy(buffer + 1, startingAddress, length);
+							log_print("Done copying!\n");
+						}
+
+						log_print("Sending everything...\n");
+						ret = sendwait(bss, clientfd, buffer, length + 1);
+						ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (read bytes buffer)")
+						log_print("Sent!\n");
+					}
+
+					startingAddress += length;
+				}
+
+				log_print("Done reading...\n");
+
+				break;*/
 			}
 			case COMMAND_VALIDATE_ADDRESS_RANGE: {
 				ret = recvwait(bss, clientfd, buffer, 8);
@@ -671,7 +695,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 					ret = recvwait(bss, clientfd, buffer, length);
 					CHECK_ERROR(ret < 0)
-					pygecko_memcpy(current_address, buffer, (unsigned int) length);
+					kernelCopyData(current_address, buffer, (unsigned int) length);
 
 					current_address += length;
 				}
@@ -1209,7 +1233,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				// Write the assembly to an executable code region
 				int destinationAddress = 0x10000000 - DATA_BUFFER_SIZE;
-				pygecko_memcpy((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
+				kernelCopyData((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
 
 				// Execute the assembly from there
 				void (*function)() = (void (*)()) destinationAddress;
@@ -1217,7 +1241,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				// Clear the memory contents again
 				memset((void *) buffer, 0, DATA_BUFFER_SIZE);
-				pygecko_memcpy((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
+				kernelCopyData((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
 
 				break;
 			}
@@ -1336,7 +1360,23 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_POKE_REGISTERS: {
+				log_print("Receiving poke registers data...\n");
+				int gprSize = 4 * 32;
+				int fprSize = 8 * 32;
+				ret = recvwait(bss, clientfd, buffer, gprSize + fprSize);
+				log_print("Poking registers...\n");
+				memcpy((void *) crashContext.gpr, (const void *) buffer, gprSize);
+				memcpy((void *) crashContext.fpr, (const void *) buffer, fprSize);
 
+				break;
+			}
+			case COMMAND_GET_ENTRY_POINT_ADDRESS: {
+				u32 *entryPointAddress = (u32 *) *((u32 *) OS_SPECIFICS->addr_OSTitle_main_entry);
+				((u32 *) buffer)[0] = (u32) entryPointAddress;
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Entry point address)");
+
+				break;
 			}
 			case COMMAND_RUN_KERNEL_COPY_SERVICE: {
 				if (!kernelCopyServiceStarted) {

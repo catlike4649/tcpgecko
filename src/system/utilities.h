@@ -17,7 +17,7 @@ void patchFunction(void *function, char *patchBytes, unsigned int patchBytesSize
 	log_print("Patching function...\n");
 	void *patchAddress = function + functionOffset;
 	log_printf("Patch address: %p\n", patchAddress);
-	kernelCopy((unsigned char *) patchAddress, (unsigned char *) patchBytes, patchBytesSize);
+	kernelCopyInt((unsigned char *) patchAddress, (unsigned char *) patchBytes, patchBytesSize);
 	log_print("Successfully patched!\n");
 }
 
