@@ -2,11 +2,8 @@
 #include "../utils/linked_list.h"
 #include "../dynamic_libs/os_functions.h"
 #include "../utils/logger.h"
-#include "../main.h"
 
 struct node *getAllThreads() {
-	log_init(COMPUTER_IP_ADDRESS);
-
 	struct node *threads = NULL;
 	int currentThreadAddress = OSGetCurrentThread();
 	log_printf("Thread address: %08x\n", currentThreadAddress);

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "utils/logger.h"
-#include "assertions.h"
-#include "dynamic_libs/os_functions.h"
-#include "common/fs_defs.h"
+#include "../utils/logger.h"
+#include "../utils/assertions.h"
+#include "../dynamic_libs/os_functions.h"
+#include "../common/fs_defs.h"
 #include "kernel.h"
 
 int (*AVMGetDRCScanMode)(int);
@@ -22,7 +22,7 @@ unsigned long getConsoleStatePatchAddress() {
 		log_print("Acquired!\n");
 	}
 
-	return (unsigned long) (AVMGetDRCScanMode + 0x44);
+	return (unsigned long) ((char *) AVMGetDRCScanMode + 0x44);
 }
 
 typedef enum {

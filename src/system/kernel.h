@@ -1,10 +1,10 @@
 #pragma once
 
-#include "kernel/syscalls.h"
-#include "assertions.h"
-#include "dynamic_libs/os_functions.h"
-#include "tcp_gecko.h"
-#include "utils/logger.h"
+#include "../kernel/syscalls.h"
+#include "../utils/assertions.h"
+#include "../dynamic_libs/os_functions.h"
+#include "../tcp_gecko.h"
+#include "../utils/logger.h"
 
 unsigned char *kernelCopyBuffer[sizeof(int)];
 
@@ -17,7 +17,8 @@ void kernelCopyData(unsigned char *destinationBuffer, unsigned char *sourceBuffe
 	}
 
 	memcpy(kernelCopyBufferOld, sourceBuffer, length);
-	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &kernelCopyBufferOld, length);
+	SC0x25_KernelCopyData((unsigned int) OSEffectiveToPhysical(destinationBuffer), (unsigned int) &kernelCopyBufferOld,
+						  length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
 
@@ -65,6 +66,8 @@ int kernelCopyService(int argc, void *argv) {
 			*(((int *) KERNEL_COPY_SOURCE_ADDRESS) + 1) = 0;
 		}
 	}
+
+	return 0;
 }
 
 void startKernelCopyService() {
@@ -84,8 +87,8 @@ void startKernelCopyService() {
 #define MINIMUM_KERNEL_COMPARE_LENGTH 4
 #define KERNEL_MEMORY_COMPARE_STEP_SIZE 1
 
-int kernelMemoryCompare(const void *sourceBuffer,
-						const void *destinationBuffer,
+int kernelMemoryCompare(const char *sourceBuffer,
+						const char *destinationBuffer,
 						int length) {
 	if (length < MINIMUM_KERNEL_COMPARE_LENGTH) {
 		ASSERT_MINIMUM_HOLDS(length, MINIMUM_KERNEL_COMPARE_LENGTH, "length");
@@ -110,4 +113,18 @@ int kernelMemoryCompare(const void *sourceBuffer,
 	}
 
 	return kern_read(sourceBuffer) - kern_read(destinationBuffer);
+}
+
+void executeAssembly(unsigned char buffer[], unsigned int size) {
+	// Write the assembly to an executable code region
+	int destinationAddress = 0x10000000 - size;
+	kernelCopyData((unsigned char *) destinationAddress, buffer, size);
+
+	// Execute the assembly from there
+	void (*function)() = (void (*)()) destinationAddress;
+	function();
+
+	// Clear the memory contents again
+	memset((void *) buffer, 0, size);
+	kernelCopyData((unsigned char *) destinationAddress, buffer, size);
 }

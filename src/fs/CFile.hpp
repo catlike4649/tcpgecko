@@ -7,51 +7,60 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <gctypes.h>
+#include "../common/fs_defs.h"
 
-class CFile
-{
-	public:
-		enum eOpenTypes
-		{
-		    ReadOnly,
-		    WriteOnly,
-		    ReadWrite,
-		    Append
-		};
+class CFile {
+public:
+	enum eOpenTypes {
+		ReadOnly,
+		WriteOnly,
+		ReadWrite,
+		Append
+	};
 
-		CFile();
-		CFile(const std::string & filepath, eOpenTypes mode);
-		CFile(const u8 * memory, int memsize);
-		virtual ~CFile();
+	CFile();
 
-		int open(const std::string & filepath, eOpenTypes mode);
-		int open(const u8 * memory, int memsize);
+	CFile(const std::string &filepath, eOpenTypes mode);
 
-		bool isOpen() const {
-            if(iFd >= 0)
-                return true;
+	CFile(const u8 *memory, int memsize);
 
-            if(mem_file)
-                return true;
+	virtual ~CFile();
 
-            return false;
-		}
+	int open(const std::string &filepath, eOpenTypes mode);
 
-		void close();
+	int open(const u8 *memory, int memsize);
 
-		int read(u8 * ptr, size_t size);
-		int write(const u8 * ptr, size_t size);
-		int fwrite(const char *format, ...);
-		int seek(long int offset, int origin);
-		u64 tell() { return pos; };
-		u64 size() { return filesize; };
-		void rewind() { this->seek(0, SEEK_SET); };
+	bool isOpen() const {
+		if (iFd >= 0)
+			return true;
 
-	protected:
-		int iFd;
-		const u8 * mem_file;
-		u64 filesize;
-		u64 pos;
+		if (mem_file)
+			return true;
+
+		return false;
+	}
+
+	void close();
+
+	int read(u8 *ptr, size_t size);
+
+	int write(const u8 *ptr, size_t size);
+
+	int fwrite(const char *format, ...);
+
+	int seek(long int offset, int origin);
+
+	u64 tell() {return pos;};
+
+	u64 size() {return filesize;};
+
+	void rewind() {this->seek(0, SEEK_SET);};
+
+protected:
+	int iFd;
+	const u8 *mem_file;
+	u64 filesize;
+	u64 pos;
 };
 
 #endif

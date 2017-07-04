@@ -58,7 +58,6 @@ static inline int getIABRMatch(void *interruptedContext) {
 unsigned char breakPointHandler(void *interruptedContext);
 
 void registerBreakPointHandler() {
-	log_init(COMPUTER_IP_ADDRESS);
 	log_print("Registering breakpoint handler...\n");
 	// TODO Not working, never called?
 	// OSSetExceptionCallback((u8) OS_EXCEPTION_DSI, &breakPointHandler);
@@ -80,7 +79,6 @@ void forceDebuggerPresent() {
 }*/
 
 static inline void setupBreakpointSupport() {
-	log_init(COMPUTER_IP_ADDRESS);
 	/*log_print("Clear and enable...\n");
 	__OSClearAndEnableInterrupt();
 	log_print("Restore...\n");
@@ -95,7 +93,6 @@ static inline void setupBreakpointSupport() {
 
 void setDataBreakpoint(int address, bool read, bool write) {
 	setupBreakpointSupport();
-	log_init(COMPUTER_IP_ADDRESS);
 	log_print("Setting DABR...\n");
 	OSSetDABR(1, address, read, write);
 	log_print("DABR set\n");
@@ -125,8 +122,6 @@ void setInstructionBreakpoint(unsigned int address) {
 }
 
 unsigned char breakPointHandler(void *interruptedContext) {
-	log_init(COMPUTER_IP_ADDRESS);
-
 	// Check for data breakpoints
 	int dataAddress = getDABRAddress(interruptedContext);
 	if (OSIsAddressValid((const void *) dataAddress)) {

@@ -50,8 +50,7 @@ extern int (*FSUnmount)(void *pClient, void *pCmd, const char *target, int errHa
 
 extern int (*FSRename)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error);
 
-extern int
-(*FSRenameAsync)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error, void *asyncParams);
+extern int (*FSRenameAsync)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error, void *asyncParams);
 
 extern int (*FSRemove)(void *pClient, void *pCmd, const char *path, int error);
 
@@ -63,8 +62,7 @@ extern int (*FSGetStatAsync)(void *pClient, void *pCmd, const char *path, void *
 
 extern int (*FSRename)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error);
 
-extern int
-(*FSRenameAsync)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error, void *asyncParams);
+extern int (*FSRenameAsync)(void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error, void *asyncParams);
 
 extern int (*FSRemove)(void *pClient, void *pCmd, const char *path, int error);
 
@@ -76,9 +74,7 @@ extern int (*FSFlushQuotaAsync)(void *pClient, void *pCmd, const char *path, int
 
 extern int (*FSGetFreeSpaceSize)(void *pClient, void *pCmd, const char *path, uint64_t *returnedFreeSize, int error);
 
-extern int
-(*FSGetFreeSpaceSizeAsync)(void *pClient, void *pCmd, const char *path, uint64_t *returnedFreeSize, int error,
-						   void *asyncParams);
+extern int (*FSGetFreeSpaceSizeAsync)(void *pClient, void *pCmd, const char *path, uint64_t *returnedFreeSize, int error, void *asyncParams);
 
 extern int (*FSRollbackQuota)(void *pClient, void *pCmd, const char *path, int error);
 
@@ -104,11 +100,9 @@ extern int (*FSMakeDirAsync)(void *pClient, void *pCmd, const char *path, int er
 
 extern int (*FSOpenFile)(void *pClient, void *pCmd, const char *path, const char *mode, int *fd, int errHandling);
 
-extern int (*FSOpenFileAsync)(void *pClient, void *pCmd, const char *path, const char *mode, int *handle, int error,
-							  const void *asyncParams);
+extern int (*FSOpenFileAsync)(void *pClient, void *pCmd, const char *path, const char *mode, int *handle, int error, const void *asyncParams);
 
-extern int
-(*FSReadFile)(void *pClient, void *pCmd, void *buffer, int size, int count, int fd, int flag, int errHandling);
+extern int (*FSReadFile)(void *pClient, void *pCmd, void *buffer, int size, int count, int fd, int flag, int errHandling);
 
 extern int (*FSCloseFile)(void *pClient, void *pCmd, int fd, int errHandling);
 
@@ -120,9 +114,7 @@ extern int (*FSGetStatFile)(void *pClient, void *pCmd, int fd, void *buffer, int
 
 extern int (*FSSetPosFile)(void *pClient, void *pCmd, int fd, int pos, int error);
 
-extern int
-(*FSWriteFile)(void *pClient, void *pCmd, const void *source, int block_size, int block_count, int fd, int flag,
-			   int error);
+extern int (*FSWriteFile)(void *pClient, void *pCmd, const void *source, int block_size, int block_count, int fd, int flag, int error);
 
 extern int (*FSBindMount)(void *pClient, void *pCmd, char *source, char *target, int error);
 

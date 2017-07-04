@@ -1,6 +1,6 @@
 #include "disassembler.h"
-#include "assertions.h"
-#include "dynamic_libs/os_functions.h"
+#include "../utils/assertions.h"
+#include "../dynamic_libs/os_functions.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>

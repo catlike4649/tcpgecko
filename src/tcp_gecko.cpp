@@ -13,12 +13,12 @@
 #include "dynamic_libs/gx2_functions.h"
 #include "dynamic_libs/fs_functions.h"
 #include "utils/logger.h"
-#include "system/memory.h"
 #include "system/hardware_breakpoints.h"
 #include "utils/linked_list.h"
-#include "address.h"
+#include "system/address.h"
 #include "system/stack.h"
-#include "pause.h"
+#include "system/pause.h"
+#include "utils/sd_ip_reader.hpp"
 
 void *client;
 void *commandBlock;
@@ -55,7 +55,7 @@ struct pygecko_bss_t {
 #define COMMAND_FOLLOW_POINTER 0x60
 #define COMMAND_REMOTE_PROCEDURE_CALL 0x70
 #define COMMAND_GET_SYMBOL 0x71
-#define COMMAND_MEMORY_SEARCH 0x72
+#define COMMAND_MEMORY_SEARCH_32 0x72
 #define COMMAND_ADVANCED_MEMORY_SEARCH 0x73
 #define COMMAND_EXECUTE_ASSEMBLY 0x81
 #define COMMAND_PAUSE_CONSOLE 0x82
@@ -111,7 +111,7 @@ int flush
 
 // ########## Being socket_functions.h ############
 
-static int recvwait(struct pygecko_bss_t *bss, int sock, void *buffer, int len) {
+static int recvwait(struct pygecko_bss_t *bss, int sock, unsigned char *buffer, int len) {
 	int ret;
 	while (len > 0) {
 		ret = recv(sock, buffer, len, 0);
@@ -145,7 +145,7 @@ static int checkbyte(int sock) {
 	return buffer[0];
 }
 
-static int sendwait(struct pygecko_bss_t *bss, int sock, const void *buffer, int len) {
+static int sendwait(struct pygecko_bss_t *bss, int sock, unsigned char *buffer, int len) {
 	int ret;
 	while (len > 0) {
 		ret = send(sock, buffer, len, 0);
@@ -168,10 +168,10 @@ static int sendByte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 
 void receiveString(struct pygecko_bss_t *bss,
 				   int clientfd,
-				   char *stringBuffer,
+				   unsigned char *stringBuffer,
 				   int bufferSize) {
 	// Receive the string length
-	char lengthBuffer[4] = {0};
+	unsigned char lengthBuffer[4] = {0};
 	int ret = recvwait(bss, clientfd, lengthBuffer, 4);
 	ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string length)")
 	int stringLength = ((int *) lengthBuffer)[0];
@@ -228,7 +228,7 @@ void considerInitializingFileSystem() {
 void reportIllegalCommandByte(int commandByte) {
 	char errorBuffer[ERROR_BUFFER_SIZE];
 	__os_snprintf(errorBuffer, ERROR_BUFFER_SIZE,
-				  "Illegal command byte received: 0x%02x\nServer Version: %s\nIf you see this, you most likely have to update your TCP Gecko Installer.",
+				  "Illegal command byte received: 0x%02x\nServer Version: %s\nIf you see this,\nplease report this bug.",
 				  commandByte, SERVER_VERSION);
 	OSFatal(errorBuffer);
 }
@@ -514,7 +514,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						   && (currentAddress < endingAddress)) {
 						int value = *(int *) currentAddress;
 						((int *) buffer)[currentIntegerIndex++] = value;
-						char *opCodeBuffer = malloc(bufferSize);
+						char *opCodeBuffer = (char *) malloc(bufferSize);
 						bool status = DisassemblePPCOpcode((u32 *) currentAddress, opCodeBuffer, (u32) bufferSize,
 														   OSGetSymbolName,
 														   (u32) disassemblerOptions);
@@ -536,7 +536,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					}
 
 					int bytesToSend = currentIntegerIndex * integerSize;
-					ret = sendwait(bss, clientfd, &bytesToSend, 4);
+					ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, 4);
 					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Buffer size)")
 
 					// VALUE(4)|STATUS(4)|LENGTH(4)|DISASSEMBLED(LENGTH)
@@ -545,7 +545,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}
 
 				int bytesToSend = 0;
-				ret = sendwait(bss, clientfd, &bytesToSend, 4);
+				ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, 4);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (No more bytes)")
 
 				break;
@@ -656,7 +656,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				u32 image_size = surface.image_size;
 
 				// Send the image size so that the client knows how much to read
-				ret = sendwait(bss, clientfd, &image_size, 4);
+				ret = sendwait(bss, clientfd, (unsigned char *) &image_size, 4);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (image size)")
 
 				unsigned int imageBytesSent = 0;
@@ -711,7 +711,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_READ_FILE: {
 				char file_path[FS_MAX_FULLPATH_SIZE] = {0};
-				receiveString(bss, clientfd, file_path, FS_MAX_FULLPATH_SIZE);
+				receiveString(bss, clientfd, (unsigned char *) file_path, FS_MAX_FULLPATH_SIZE);
 
 				considerInitializingFileSystem();
 
@@ -747,7 +747,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						ASSERT_FUNCTION_SUCCEEDED(bytesRead, "FSReadFile")
 
 						// Send file bytes
-						ret = sendwait(bss, clientfd, fileBuffer, bytesRead);
+						ret = sendwait(bss, clientfd, (unsigned char *) fileBuffer, bytesRead);
 						ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (file buffer)")
 
 						totalBytesRead += bytesRead;
@@ -768,7 +768,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_READ_DIRECTORY: {
 				char directory_path[FS_MAX_FULLPATH_SIZE] = {0};
-				receiveString(bss, clientfd, directory_path, FS_MAX_FULLPATH_SIZE);
+				receiveString(bss, clientfd, (unsigned char *) directory_path, FS_MAX_FULLPATH_SIZE);
 
 				considerInitializingFileSystem();
 
@@ -793,7 +793,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 						ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (data coming)")
 
 						// Send the struct
-						ret = sendwait(bss, clientfd, &entry, entrySize);
+						ret = sendwait(bss, clientfd, (unsigned char *) &entry, entrySize);
 						ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (directory entry)")
 					}
 
@@ -819,7 +819,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				// Receive the file path
 				char file_path[FS_MAX_FULLPATH_SIZE] = {0};
-				receiveString(bss, clientfd, file_path, FS_MAX_FULLPATH_SIZE);
+				receiveString(bss, clientfd, (unsigned char *) file_path, FS_MAX_FULLPATH_SIZE);
 
 				considerInitializingFileSystem();
 
@@ -843,19 +843,19 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					ASSERT_ALLOCATED(fileBuffer, "File buffer")
 
 					// Send the maximum file buffer size
-					ret = sendwait(bss, clientfd, &file_buffer_size, 4);
+					ret = sendwait(bss, clientfd, (unsigned char *) &file_buffer_size, 4);
 					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (maximum file buffer size)")
 
 					while (true) {
 						// Receive the data bytes length
 						unsigned int dataLength;
-						ret = recvwait(bss, clientfd, &dataLength, 4);
+						ret = recvwait(bss, clientfd, (unsigned char *) &dataLength, 4);
 						ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (File bytes length)")
 						ASSERT_MAXIMUM_HOLDS(file_buffer_size, dataLength, "File buffer overrun attempted")
 
 						if (dataLength > 0) {
 							// Receive the data
-							ret = recvwait(bss, clientfd, fileBuffer, dataLength);
+							ret = recvwait(bss, clientfd, (unsigned char *) fileBuffer, dataLength);
 							ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (File buffer)")
 
 							// Write the data (and advance file handle position implicitly)
@@ -888,7 +888,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_IOSU_HAX_READ_FILE: {
-				log_print("COMMAND_IOSUHAX_READ_FILE");
+				/*log_print("COMMAND_IOSUHAX_READ_FILE");
 
 				// TODO Crashes console on this call
 				int returnValue = IOSUHAX_Open(NULL);
@@ -965,7 +965,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				returnValue = IOSUHAX_Close();
 				log_printf("IOSUHAX_Close: %i", returnValue);
 
-				IOSUHAX_OPEN_FAILED:
+				IOSUHAX_OPEN_FAILED:*/
 
 				break;
 			}
@@ -1039,7 +1039,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				ASSERT_FUNCTION_SUCCEEDED(ret, "nn_act_Finalize");
 
 				// Send it
-				ret = sendwait(bss, clientfd, &persistentIdentifier, 4);
+				ret = sendwait(bss, clientfd, (unsigned char *) &persistentIdentifier, 4);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (persistent identifier)")
 
 				break;
@@ -1113,7 +1113,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				ret = recvwait(bss, clientfd, buffer, 4 + 8 * 4);
 				CHECK_ERROR(ret < 0);
 
-				fun = ((void **) buffer)[0];
+				fun = (long long int (*)(int, int, int, int, int, int, int, int)) ((void **) buffer)[0];
 				r3 = ((int *) buffer)[1];
 				r4 = ((int *) buffer)[2];
 				r5 = ((int *) buffer)[3];
@@ -1139,15 +1139,15 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				CHECK_ERROR(ret < 0)
 
 				/* Identify the RPL name and symbol name */
-				char *rplname = (char *) &((int *) buffer)[2];
-				char *symname = (char *) (&buffer[0] + ((int *) buffer)[1]);
+				char *rplName = (char *) &((int *) buffer)[2];
+				char *symbolName = (char *) (&buffer[0] + ((int *) buffer)[1]);
 
 				/* Get the symbol and store it in the buffer */
 				unsigned int module_handle, function_address;
-				OSDynLoad_Acquire(rplname, &module_handle);
+				OSDynLoad_Acquire(rplName, &module_handle);
 
 				char data = (char) recvbyte(bss, clientfd);
-				OSDynLoad_FindExport(module_handle, data, symname, &function_address);
+				OSDynLoad_FindExport(module_handle, data, symbolName, &function_address);
 
 				((int *) buffer)[0] = (int) function_address;
 				ret = sendwait(bss, clientfd, buffer, 4);
@@ -1155,7 +1155,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			case COMMAND_MEMORY_SEARCH: {
+			case COMMAND_MEMORY_SEARCH_32: {
 				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 3);
 				CHECK_ERROR(ret < 0);
 				int address = ((int *) buffer)[0];
@@ -1178,7 +1178,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_ADVANCED_MEMORY_SEARCH: {
 				// Receive the initial data
-				ret = recvwait(bss, clientfd, buffer, 4 * 6);
+				ret = recvwait(bss, clientfd, buffer, 6 * sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (memory search information)")
 				int bufferIndex = 0;
 				int startingAddress = ((int *) buffer)[bufferIndex++];
@@ -1190,7 +1190,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				// Receive the search bytes
 				char searchBytes[searchBytesCount];
-				ret = recvwait(bss, clientfd, searchBytes, searchBytesCount);
+				ret = recvwait(bss, clientfd, (unsigned char *) searchBytes, searchBytesCount);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (memory search bytes)")
 
 				int iterationIncrement = aligned ? searchBytesCount : 1;
@@ -1204,7 +1204,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					int comparisonResult;
 
 					if (kernelRead) {
-						comparisonResult = kernelMemoryCompare((void *) currentAddress, searchBytes, searchBytesCount);
+						comparisonResult = kernelMemoryCompare((char *) currentAddress, searchBytes, searchBytesCount);
 					} else {
 						comparisonResult = memcmp((void *) currentAddress, searchBytes, searchBytesCount);
 					}
@@ -1228,20 +1228,8 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_EXECUTE_ASSEMBLY: {
-				// Receive the assembly
-				receiveString(bss, clientfd, (char *) buffer, DATA_BUFFER_SIZE);
-
-				// Write the assembly to an executable code region
-				int destinationAddress = 0x10000000 - DATA_BUFFER_SIZE;
-				kernelCopyData((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
-
-				// Execute the assembly from there
-				void (*function)() = (void (*)()) destinationAddress;
-				function();
-
-				// Clear the memory contents again
-				memset((void *) buffer, 0, DATA_BUFFER_SIZE);
-				kernelCopyData((unsigned char *) destinationAddress, buffer, DATA_BUFFER_SIZE);
+				receiveString(bss, clientfd, (unsigned char *) buffer, DATA_BUFFER_SIZE);
+				executeAssembly(buffer, DATA_BUFFER_SIZE);
 
 				break;
 			}
@@ -1408,8 +1396,7 @@ static int runTCPGeckoServer(int argc, void *argv) {
 
 	setup_os_exceptions();
 	socket_lib_init();
-
-	log_init(COMPUTER_IP_ADDRESS);
+	initializeUDPLog();
 
 	while (true) {
 		socketAddress.sin_family = AF_INET;
@@ -1460,18 +1447,18 @@ static int runTCPGeckoServer(int argc, void *argv) {
 }
 
 static int startTCPGeckoThread(int argc, void *argv) {
-	log_init(COMPUTER_IP_ADDRESS);
 	log_print("Starting TCP Gecko thread...\n");
 
 	// Run the TCP Gecko Installer server
 	struct pygecko_bss_t *bss;
 
-	bss = memalign(0x40, sizeof(struct pygecko_bss_t));
+	bss = (struct pygecko_bss_t *) memalign(0x40, sizeof(struct pygecko_bss_t));
 	if (bss == 0)
 		return 0;
 	memset(bss, 0, sizeof(struct pygecko_bss_t));
 
-	if (OSCreateThread(&bss->thread, runTCPGeckoServer, 1, bss, (u32) bss->stack + sizeof(bss->stack),
+	if (OSCreateThread(&bss->thread, (s32 (*)(s32, void *)) runTCPGeckoServer, 1, bss,
+					   (u32) bss->stack + sizeof(bss->stack),
 					   sizeof(bss->stack), 0,
 					   0xc) == 1) {
 		OSResumeThread(&bss->thread);
@@ -1499,7 +1486,6 @@ static int startTCPGeckoThread(int argc, void *argv) {
 }
 
 void startTCPGecko() {
-	log_init(COMPUTER_IP_ADDRESS);
 	log_print("Starting TCP Gecko...\n");
 
 	// Force the debugger to be initialized by default

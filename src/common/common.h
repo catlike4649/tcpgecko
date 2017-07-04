@@ -1,11 +1,11 @@
-#ifndef COMMON_H
-#define	COMMON_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "os_defs.h"
+#include "fs_defs.h"
 
 #define CODE_HANDLER_INSTALL_ADDRESS 0x010F4000
 
@@ -58,17 +58,15 @@ extern "C" {
 #define RESTORE_INSTR_ADDR          ((restore_instructions_t*)(MEM_BASE + 0x1600))
 
 typedef struct _restore_instructions_t {
-    unsigned int magic;
-    unsigned int instr_count;
-    struct {
-        unsigned int addr;
-        unsigned int instr;
-    } data[0];
+	unsigned int magic;
+	unsigned int instr_count;
+	struct {
+		unsigned int addr;
+		unsigned int instr;
+	} data[0];
 } restore_instructions_t;
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif	/* COMMON_H */
 

@@ -18,6 +18,8 @@
 #include "utils/logger.h"
 #include "utils/function_patcher.h"
 #include "patcher/function_patcher_gx2.h"
+#include "patcher/function_patcher_coreinit.h"
+#include "utils/sd_ip_reader.hpp"
 
 bool isCodeHandlerInstalled;
 
@@ -30,6 +32,7 @@ typedef enum {
 
 void applyFunctionPatches() {
 	patchIndividualMethodHooks(method_hooks_gx2, method_hooks_size_gx2, method_calls_gx2);
+	patchIndividualMethodHooks(method_hooks_coreinit, method_hooks_size_coreinit, method_calls_coreinit);
 }
 
 /* Entry point */
@@ -91,7 +94,7 @@ int Menu_Main(void) {
 	int screenBuffer0Size = OSScreenGetBufferSizeEx(0);
 	int screenBuffer1Size = OSScreenGetBufferSizeEx(1);
 
-	unsigned char *screenBuffer = MEM1_alloc(screenBuffer0Size + screenBuffer1Size, 0x40);
+	unsigned char *screenBuffer = (unsigned char *) MEM1_alloc(screenBuffer0Size + screenBuffer1Size, 0x40);
 
 	OSScreenSetBufferEx(0, screenBuffer);
 	OSScreenSetBufferEx(1, (screenBuffer + screenBuffer0Size));
@@ -147,7 +150,7 @@ int Menu_Main(void) {
 			isCodeHandlerInstalled = true;
 			launchMethod = TCP_GECKO;
 
-			log_init(COMPUTER_IP_ADDRESS);
+			initializeUDPLog();
 			log_print("Patching functions\n");
 			applyFunctionPatches();
 

@@ -3,7 +3,7 @@
 
 #include "../dynamic_libs/os_functions.h"
 #include "../utils/logger.h"
-#include "../kernel.h"
+#include "kernel.h"
 #include "../common/kernel_types.h"
 
 void writeCode(u32 address, u32 instruction) {
@@ -13,7 +13,7 @@ void writeCode(u32 address, u32 instruction) {
 	ICInvalidateRange(pointer, 4);
 }
 
-void patchFunction(void *function, char *patchBytes, unsigned int patchBytesSize, int functionOffset) {
+void patchFunction(char *function, char *patchBytes, unsigned int patchBytesSize, int functionOffset) {
 	log_print("Patching function...\n");
 	void *patchAddress = function + functionOffset;
 	log_printf("Patch address: %p\n", patchAddress);

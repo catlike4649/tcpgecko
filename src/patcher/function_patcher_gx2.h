@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  ****************************************************************************/
 
-#ifndef FUNCTION_PATCHER_EXAMPLE_GX2_FUNCTION_PATCHER_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +29,4 @@ extern volatile unsigned int method_calls_gx2[];
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
