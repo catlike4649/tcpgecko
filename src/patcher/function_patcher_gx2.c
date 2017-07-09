@@ -19,14 +19,48 @@
 #include <gd.h> // image library
 #include "../utils/function_patcher.h"
 #include "../utils/logger.h"
-#include "texture.h"
+#include "function_patcher_gx2.h"
 #include <gd.h>
+#include <string.h> // memcpy()
 
 static volatile int executionCounter = 0;
 
-declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *colorBuffer, s32 scan_target) {
+bool shouldTakeScreenShot = false;
+unsigned int remainingImageSize = 0;
+unsigned int totalImageSize = 0;
+int bufferedImageSize = 0;
+void *bufferedImageData = NULL;
+
+declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *colorBuffer, s32
+		scan_target) {
 	if (executionCounter > 120) {
 		GX2Surface surface = colorBuffer->surface;
+		log_printf("GX2CopyColorBufferToScanBuffer {surface width:%d, height:%d, image size:%d, image data:%x}\n",
+				   surface.width, surface.height, surface.image_size, surface.image_data);
+
+		if (shouldTakeScreenShot) {
+			void *imageData = surface.image_data;
+			totalImageSize = surface.image_size;
+			remainingImageSize = totalImageSize;
+			int bufferSize = IMAGE_BUFFER_SIZE;
+
+			while (remainingImageSize > 0) {
+				bufferedImageData = malloc(bufferSize);
+				u32 imageSizeRead = totalImageSize - remainingImageSize;
+				memcpy(bufferedImageData, imageData + imageSizeRead, bufferSize);
+				bufferedImageSize = bufferSize;
+
+				// Wait while the data is not read yet
+				while (bufferedImageSize > 0) {
+					usleep(WAITING_TIME_MILLISECONDS);
+				}
+
+				free(bufferedImageData);
+				remainingImageSize -= bufferSize;
+			}
+
+			shouldTakeScreenShot = false;
+		}
 		/*s32 format = surface.format;
 
 		gdImagePtr gdImagePtr = 0;
@@ -51,8 +85,6 @@ declareFunctionHook(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *
 			jpeg.img_data = data;
 			jpeg.img_id = 0;
 		}*/
-
-		log_printf("GX2CopyColorBufferToScanBuffer {surface width:%d, height:%d, image size:%d, image data:%x}\n", surface.width, surface.height, surface.image_size, surface.image_data);
 
 		executionCounter = 0;
 	}

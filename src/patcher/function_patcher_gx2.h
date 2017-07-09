@@ -23,8 +23,31 @@ extern "C" {
 
 #include "../utils/function_patcher.h"
 
+// The dynamically allocated buffer size for the image copy
+#define IMAGE_BUFFER_SIZE 100
+
+// The time the producer and consumer wait while there is nothing to do
+#define WAITING_TIME_MILLISECONDS 1
+
+// Flag for telling the hook whether to dump a screen shot
+extern bool shouldTakeScreenShot;
+
+// Indication for the consumer how many bytes are there to read in total
+extern unsigned int totalImageSize;
+
+// Indication for the consumer how many bytes are left to read
+extern unsigned int remainingImageSize;
+
+// Indication for the consumer how many bytes can be read from the buffer at once
+extern int bufferedImageSize;
+
+// The actual image data buffer for the consumer to consume
+extern void *bufferedImageData;
+
 extern FunctionHook method_hooks_gx2[];
+
 extern u32 method_hooks_size_gx2;
+
 extern volatile unsigned int method_calls_gx2[];
 
 #ifdef __cplusplus

@@ -19,6 +19,7 @@
 #include "system/stack.h"
 #include "system/pause.h"
 #include "utils/sd_ip_reader.hpp"
+#include "patcher/function_patcher_gx2.h"
 
 void *client;
 void *commandBlock;
@@ -98,16 +99,6 @@ deflate OF((z_streamp
 strm,
 int flush
 ));
-
-// ########## Being kernel_copy.h ############
-
-// ########## End kernel_copy.h ############
-
-// ########## Begin pause.h ############
-
-
-
-// ########## End pause.h ############
 
 // ########## Being socket_functions.h ############
 
@@ -251,18 +242,17 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 		switch (ret) {
 			case COMMAND_WRITE_8: {
-				char *destinationAddress;
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0);
 
-				destinationAddress = ((char **) buffer)[0];
+				char *destinationAddress = ((char **) buffer)[0];
 				*destinationAddress = buffer[7];
 				DCFlushRange(destinationAddress, 1);
 				break;
 			}
 			case COMMAND_WRITE_16: {
 				short *destinationAddress;
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 
 				destinationAddress = ((short **) buffer)[0];
@@ -272,18 +262,18 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_WRITE_32: {
 				int destinationAddress, value;
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 
 				destinationAddress = ((int *) buffer)[0];
 				value = ((int *) buffer)[1];
 
-				kernelCopyData((unsigned char *) destinationAddress, (unsigned char *) &value, 4);
+				kernelCopyData((unsigned char *) destinationAddress, (unsigned char *) &value, sizeof(int));
 				break;
 			}
 			case COMMAND_READ_MEMORY: {
 				const unsigned char *startingAddress, *endingAddress;
-				ret = recvwait(bss, clientfd, buffer, 2 * 4);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 				startingAddress = ((const unsigned char **) buffer)[0];
 				endingAddress = ((const unsigned char **) buffer)[1];
@@ -456,7 +446,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;*/
 			}
 			case COMMAND_VALIDATE_ADDRESS_RANGE: {
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 
 				// Retrieve the data
@@ -496,7 +486,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}*/
 			case COMMAND_MEMORY_DISASSEMBLE: {
 				// Receive the starting address, ending address and disassembler options
-				ret = recvwait(bss, clientfd, buffer, 4 + 4 + 4);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 3);
 				CHECK_ERROR(ret < 0)
 				int startingAddress = ((int *) buffer)[0];
 				int endingAddress = ((int *) buffer)[1];
@@ -536,7 +526,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					}
 
 					int bytesToSend = currentIntegerIndex * integerSize;
-					ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, 4);
+					ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, sizeof(int));
 					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Buffer size)")
 
 					// VALUE(4)|STATUS(4)|LENGTH(4)|DISASSEMBLED(LENGTH)
@@ -545,14 +535,14 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}
 
 				int bytesToSend = 0;
-				ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, 4);
+				ret = sendwait(bss, clientfd, (unsigned char *) &bytesToSend, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (No more bytes)")
 
 				break;
 			}
 			case COMMAND_READ_MEMORY_COMPRESSED: {
 				// Receive the starting address and length
-				ret = recvwait(bss, clientfd, buffer, 4 + 4);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 				int startingAddress = ((int *) buffer)[0];
 				unsigned int inputLength = ((unsigned int *) buffer)[1];
@@ -625,38 +615,67 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;*/
 			}
 			case COMMAND_KERNEL_WRITE: {
-				void *ptr, *value;
 				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
 
-				ptr = ((void **) buffer)[0];
-				value = ((void **) buffer)[1];
+				void *address = ((void **) buffer)[0];
+				void *value = ((void **) buffer)[1];
 
-				writeKernelMemory(ptr, (uint32_t) value);
+				writeKernelMemory(address, (uint32_t) value);
 				break;
 			}
 			case COMMAND_KERNEL_READ: {
-				void *ptr, *value;
 				ret = recvwait(bss, clientfd, buffer, sizeof(int));
-				CHECK_ERROR(ret < 0);
+				CHECK_ERROR(ret < 0)
 
-				ptr = ((void **) buffer)[0];
-
-				value = (void *) readKernelMemory(ptr);
+				void *address = ((void **) buffer)[0];
+				void *value = (void *) readKernelMemory(address);
 
 				*(void **) buffer = value;
 				sendwait(bss, clientfd, buffer, sizeof(int));
 				break;
 			}
 			case COMMAND_TAKE_SCREEN_SHOT: {
-				GX2ColorBuffer colorBuffer;
+				// Tell the hook to dump the screen shot now
+				shouldTakeScreenShot = true;
+
+				// Tell the client the size of the upcoming image
+				ret = sendwait(bss, clientfd, (unsigned char *) &totalImageSize, sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (total image size)")
+
+				// Keep sending the image data
+				while (remainingImageSize > 0) {
+					int bufferPosition = 0;
+
+					// Fill the buffer till it is full
+					while (bufferPosition <= DATA_BUFFER_SIZE) {
+						// Wait for data to be available
+						while (bufferedImageSize == 0) {
+							usleep(WAITING_TIME_MILLISECONDS);
+						}
+
+						memcpy(buffer + bufferPosition, bufferedImageData, bufferedImageSize);
+						bufferPosition += bufferedImageSize;
+						bufferedImageSize = 0;
+					}
+
+					// Send the size of the current chunk
+					ret = sendwait(bss, clientfd, (unsigned char *) &bufferPosition, sizeof(int));
+					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (image data chunk size)")
+
+					// Send the image data itself
+					ret = sendwait(bss, clientfd, buffer, bufferPosition);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (image data)")
+				}
+
+				/*GX2ColorBuffer colorBuffer;
 				// TODO Initialize colorBuffer!
 				GX2Surface surface = colorBuffer.surface;
 				void *image_data = surface.image_data;
 				u32 image_size = surface.image_size;
 
 				// Send the image size so that the client knows how much to read
-				ret = sendwait(bss, clientfd, (unsigned char *) &image_size, 4);
+				ret = sendwait(bss, clientfd, (unsigned char *) &image_size, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (image size)")
 
 				unsigned int imageBytesSent = 0;
@@ -674,37 +693,37 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (image bytes)")
 
 					imageBytesSent += length;
-				}
+				}*/
 
 				break;
 			}
 			case COMMAND_UPLOAD_MEMORY: {
 				// Receive the starting and ending addresses
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
-				unsigned char *current_address = ((unsigned char **) buffer)[0];
-				unsigned char *end_address = ((unsigned char **) buffer)[1];
+				unsigned char *currentAddress = ((unsigned char **) buffer)[0];
+				unsigned char *endAddress = ((unsigned char **) buffer)[1];
 
-				while (current_address != end_address) {
+				while (currentAddress != endAddress) {
 					int length;
 
-					length = (int) (end_address - current_address);
+					length = (int) (endAddress - currentAddress);
 					if (length > DATA_BUFFER_SIZE) {
 						length = DATA_BUFFER_SIZE;
 					}
 
 					ret = recvwait(bss, clientfd, buffer, length);
 					CHECK_ERROR(ret < 0)
-					kernelCopyData(current_address, buffer, (unsigned int) length);
+					kernelCopyData(currentAddress, buffer, (unsigned int) length);
 
-					current_address += length;
+					currentAddress += length;
 				}
 
 				break;
 			}
 			case COMMAND_GET_DATA_BUFFER_SIZE: {
 				((int *) buffer)[0] = DATA_BUFFER_SIZE;
-				ret = sendwait(bss, clientfd, buffer, 4);
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
 				CHECK_ERROR(ret < 0)
 
 				break;
