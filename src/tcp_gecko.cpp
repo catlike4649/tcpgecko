@@ -84,7 +84,7 @@ struct pygecko_bss_t {
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
-#define VERSION_HASH 0x3AC9444B
+#define VERSION_HASH 0xC9D0452
 
 ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
@@ -1074,7 +1074,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					break;
 				}*/
 			case COMMAND_FOLLOW_POINTER: {
-				ret = recvwait(bss, clientfd, buffer, 8);
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (Pointer address and offsets count)")
 
 				// Retrieve the pointer address and amount of offsets
@@ -1082,7 +1082,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				int offsetsCount = ((int *) buffer)[1];
 
 				// Receive the offsets
-				ret = recvwait(bss, clientfd, buffer, offsetsCount * 4);
+				ret = recvwait(bss, clientfd, buffer, offsetsCount * sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (offsets)")
 				int offsets[offsetsCount];
 				int offsetIndex = 0;
@@ -1091,30 +1091,26 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}
 
 				int destinationAddress = baseAddress;
-				if (isValidDataAddress(destinationAddress)) {
-					// Apply pointer offsets
-					for (offsetIndex = 0; offsetIndex < offsetsCount; offsetIndex++) {
-						int pointerValue = *(int *) destinationAddress;
-						int offset = offsets[offsetIndex];
-						destinationAddress = pointerValue + offset;
+				// Apply pointer offsets
+				for (offsetIndex = 0; offsetIndex < offsetsCount; offsetIndex++) {
+					int pointerValue = *(int *) destinationAddress;
+					int offset = offsets[offsetIndex];
+					destinationAddress = pointerValue + offset;
 
-						// Validate the pointer address
-						bool isValidDestinationAddress = isValidDataAddress(destinationAddress);
+					// Validate the pointer address
+					bool isValidDestinationAddress = isValidDataAddress(destinationAddress);
 
-						// Bail out if invalid
-						if (!isValidDestinationAddress) {
-							destinationAddress = -1;
+					// Bail out if invalid
+					if (!isValidDestinationAddress) {
+						destinationAddress = -1;
 
-							break;
-						}
+						break;
 					}
-				} else {
-					destinationAddress = -1;
 				}
 
 				// Return the destination address
 				((int *) buffer)[0] = destinationAddress;
-				ret = sendwait(bss, clientfd, buffer, 4);
+				ret = sendwait(bss, clientfd, buffer, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (destination address)")
 
 				break;
