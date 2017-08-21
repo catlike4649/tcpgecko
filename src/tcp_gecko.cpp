@@ -20,6 +20,7 @@
 #include "system/pause.h"
 #include "utils/sd_ip_reader.hpp"
 #include "patcher/function_patcher_gx2.h"
+#include "system/raw_assembly_cheats.h"
 
 void *client;
 void *commandBlock;
@@ -74,6 +75,8 @@ struct pygecko_bss_t {
 #define COMMAND_RUN_KERNEL_COPY_SERVICE 0xCD
 #define COMMAND_IOSU_HAX_READ_FILE 0xD0
 #define COMMAND_GET_VERSION_HASH 0xE0
+#define COMMAND_PERSIST_ASSEMBLY 0xE1
+#define COMMAND_CLEAR_ASSEMBLY 0xE2
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
 #define errno (*__gh_errno_ptr())
@@ -84,7 +87,7 @@ struct pygecko_bss_t {
 #define ONLY_ZEROS_READ 0xB0
 #define NON_ZEROS_READ 0xBD
 
-#define VERSION_HASH 0xC9D0452
+#define VERSION_HASH 0x7FB223
 
 ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
@@ -157,23 +160,25 @@ static int sendByte(struct pygecko_bss_t *bss, int sock, unsigned char byte) {
 	return sendwait(bss, sock, buffer, 1);
 }
 
-void receiveString(struct pygecko_bss_t *bss,
-				   int clientfd,
-				   unsigned char *stringBuffer,
-				   int bufferSize) {
+unsigned int receiveString(struct pygecko_bss_t *bss,
+						   int clientfd,
+						   unsigned char *stringBuffer,
+						   unsigned int bufferSize) {
 	// Receive the string length
 	unsigned char lengthBuffer[4] = {0};
-	int ret = recvwait(bss, clientfd, lengthBuffer, 4);
+	int ret = recvwait(bss, clientfd, lengthBuffer, sizeof(int));
 	ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string length)")
-	int stringLength = ((int *) lengthBuffer)[0];
+	unsigned int stringLength = ((unsigned int *) lengthBuffer)[0];
 
-	if (stringLength >= 0 && stringLength <= bufferSize) {
+	if (stringLength <= bufferSize) {
 		// Receive the actual string
 		ret = recvwait(bss, clientfd, stringBuffer, stringLength);
 		ASSERT_FUNCTION_SUCCEEDED(ret, "recvwait (string)")
 	} else {
 		OSFatal("String buffer size exceeded");
 	}
+
+	return stringLength;
 }
 
 // ########## End socket_functions.h ############
@@ -1389,6 +1394,17 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
+			case COMMAND_PERSIST_ASSEMBLY: {
+				unsigned int length = receiveString(bss, clientfd, (unsigned char *) buffer, DATA_BUFFER_SIZE);
+				persistAssembly(buffer, length);
+
+				break;
+			}
+			case COMMAND_CLEAR_ASSEMBLY: {
+				clearAssembly();
+
+				break;
+			}
 			default: {
 				reportIllegalCommandByte(ret);
 
@@ -1492,6 +1508,10 @@ static int startTCPGeckoThread(int argc, void *argv) {
 			usleep(9000);
 			// log_print("Running code handler...\n");
 			codeHandlerFunction();
+
+			if (assemblySize > 0) {
+				executeAssembly();
+			}
 		}
 	} else {
 		log_print("Code handler not installed...\n");
