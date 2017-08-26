@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include "common/common.h"
 #include <zlib.h> // Actually must be included before os_functions
 #include "dynamic_libs/os_functions.h"
@@ -21,6 +22,7 @@
 #include "utils/sd_ip_reader.hpp"
 #include "patcher/function_patcher_gx2.h"
 #include "system/raw_assembly_cheats.h"
+#include "fs/fs_utils.h"
 
 void *client;
 void *commandBlock;
@@ -1477,6 +1479,35 @@ static int runTCPGeckoServer(int argc, void *argv) {
 	return 0;
 }
 
+#define EXTENSION_SIZE 6
+#define SD_FILE_PATH_HEADER_LENGTH 10
+#define TITLE_ID_LEADING_ZEROS 3
+#define TITLE_ID_LENGTH 16
+#define CODES_FILE_PATH_SIZE (SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LENGTH + EXTENSION_SIZE)
+
+void applyCheatCodes() {
+	unsigned char filePath[CODES_FILE_PATH_SIZE];
+	memset(filePath, '0', sizeof(filePath));
+	memcpy(filePath, "sd:/codes/", SD_FILE_PATH_HEADER_LENGTH); // File path header
+	u64 titleID = OSGetTitleID();
+	char asciiTitleID[TITLE_ID_LENGTH];
+	snprintf(asciiTitleID, TITLE_ID_LENGTH, "%llX", titleID);
+	memcpy(filePath + SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LEADING_ZEROS, asciiTitleID, TITLE_ID_LENGTH); // Title ID
+	memcpy(filePath + SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LENGTH, ".gctu", EXTENSION_SIZE); // Extension
+	filePath[CODES_FILE_PATH_SIZE - 1] = '\0'; // Null-terminated
+
+	unsigned char *codes = NULL;
+	unsigned int codesSize = 0;
+	int result = LoadFileToMem((const char *) filePath, &codes, &codesSize);
+
+	if (result < 0) {
+		// Error, we won't write any codes
+		return;
+	}
+
+	kernelCopyData((unsigned char *) 0x01133000, codes, codesSize);
+}
+
 static int startTCPGeckoThread(int argc, void *argv) {
 	log_print("Starting TCP Gecko thread...\n");
 
@@ -1506,6 +1537,8 @@ static int startTCPGeckoThread(int argc, void *argv) {
 
 		while (true) {
 			usleep(9000);
+
+			applyCheatCodes();
 			// log_print("Running code handler...\n");
 			codeHandlerFunction();
 

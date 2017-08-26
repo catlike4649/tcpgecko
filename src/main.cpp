@@ -5,7 +5,6 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <inttypes.h>
 #include "dynamic_libs/os_functions.h"
 #include "dynamic_libs/fs_functions.h"
 #include "dynamic_libs/sys_functions.h"
@@ -34,22 +33,6 @@ typedef enum {
 void applyFunctionPatches() {
 	patchIndividualMethodHooks(method_hooks_gx2, method_hooks_size_gx2, method_calls_gx2);
 	patchIndividualMethodHooks(method_hooks_coreinit, method_hooks_size_coreinit, method_calls_coreinit);
-}
-
-void applyCheatCodes(){
-	uint64_t titleIDNum = OSGetTitleID();
-	char titleID[17];
-	sprintf(titleID, "%" PRIu64, titleIDNum);
-	char fileName[24];
-	strncat(fileName, titleID, 16);
-	strncat(fileName, ".gctu", 5);
-	FILE * fPointer;
-	fPointer = fopen(fileName, "r");
-	char codes[8192];
-	if (fPointer != NULL){
-	        fgets(codes, 8192, fPointer);
-		memcpy((void*)0x10015000, (void*)codes, sizeof(codes));
-	}
 }
 
 /* Entry point */
@@ -166,9 +149,6 @@ int Menu_Main(void) {
 
 			isCodeHandlerInstalled = true;
 			launchMethod = TCP_GECKO;
-			
-			applyCheatCodes();
-
 			initializeUDPLog();
 			log_print("Patching functions\n");
 			applyFunctionPatches();
