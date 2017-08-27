@@ -6,8 +6,6 @@
 #include "../tcp_gecko.h"
 #include "../utils/logger.h"
 
-unsigned char *kernelCopyBuffer[sizeof(int)];
-
 // TODO Variable size, not hard-coded
 unsigned char *kernelCopyBufferOld[DATA_BUFFER_SIZE];
 
@@ -21,6 +19,8 @@ void kernelCopyData(unsigned char *destinationBuffer, unsigned char *sourceBuffe
 						  length);
 	DCFlushRange(destinationBuffer, (u32) length);
 }
+
+unsigned char *kernelCopyBuffer[sizeof(int)];
 
 void kernelCopyInt(unsigned char *destinationBuffer, unsigned char *sourceBuffer, unsigned int length) {
 	memcpy(kernelCopyBuffer, sourceBuffer, length);

@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <inttypes.h>
+// #include <inttypes.h>
 #include "common/common.h"
 #include <zlib.h> // Actually must be included before os_functions
 #include "dynamic_libs/os_functions.h"
@@ -22,8 +22,7 @@
 #include "utils/sd_ip_reader.hpp"
 #include "patcher/function_patcher_gx2.h"
 #include "system/raw_assembly_cheats.h"
-#include "fs/fs_utils.h"
-#include "fs/sd_fat_devoptab.h"
+#include "sd_cheats.h"
 
 void *client;
 void *commandBlock;
@@ -1480,64 +1479,6 @@ static int runTCPGeckoServer(int argc, void *argv) {
 	return 0;
 }
 
-#define EXTENSION_SIZE 6
-#define SD_FILE_PATH_HEADER_LENGTH 10
-#define TITLE_ID_LEADING_ZEROS 3
-#define TITLE_ID_LENGTH 16
-#define CODES_FILE_PATH_SIZE (SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LENGTH + EXTENSION_SIZE)
-
-u64 cachedTitleID = 0;
-
-void considerApplyingSDCheats() {
-	u64 currentTitleID = OSGetTitleID();
-
-	if (cachedTitleID == currentTitleID) {
-		// log_print("Title ID NOT changed\n");
-	} else {
-		log_print("Title ID changed\n");
-		cachedTitleID = currentTitleID;
-		int result = mount_sd_fat("sd");
-
-		if (result < 0) {
-			log_printf("Mounting error: %i\n", result);
-			return;
-		}
-
-		unsigned char filePath[CODES_FILE_PATH_SIZE];
-		memset(filePath, '0', sizeof(filePath));
-		memcpy(filePath, "sd:/codes/", SD_FILE_PATH_HEADER_LENGTH); // File path header
-		log_printf("Title ID: %lu\n", currentTitleID);
-		char asciiTitleID[TITLE_ID_LENGTH];
-		snprintf(asciiTitleID, TITLE_ID_LENGTH, "%llX", currentTitleID);
-		memcpy(filePath + SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LEADING_ZEROS, asciiTitleID,
-			   TITLE_ID_LENGTH); // Title ID
-		memcpy(filePath + SD_FILE_PATH_HEADER_LENGTH + TITLE_ID_LENGTH, ".gctu", EXTENSION_SIZE); // Extension
-		filePath[CODES_FILE_PATH_SIZE - 1] = '\0'; // Null-terminated
-		log_printf("File Path: %s\n", filePath);
-
-		unsigned char *codes = NULL;
-		unsigned int codesSize = 0;
-		result = LoadFileToMem((const char *) filePath, &codes, &codesSize);
-
-		if (result < 0) {
-			log_printf("Reading error: %i\n", result);
-			// Error, we won't write any codes
-			goto CLEANUP;
-		}
-
-		kernelCopyData((unsigned char *) 0x01133000, codes, codesSize);
-		log_print("Copied!\n");
-
-		CLEANUP:
-
-		result = unmount_sd_fat("sd");
-
-		if (result < 0) {
-			log_printf("Unmounting error: %i\n", result);
-		}
-	}
-}
-
 static int startTCPGeckoThread(int argc, void *argv) {
 	log_print("Starting TCP Gecko thread...\n");
 
@@ -1562,13 +1503,14 @@ static int startTCPGeckoThread(int argc, void *argv) {
 
 	// Execute the code handler if it is installed
 	if (isCodeHandlerInstalled) {
+		considerApplyingSDCheats();
 		log_print("Code handler installed...\n");
 		void (*codeHandlerFunction)() = (void (*)()) CODE_HANDLER_INSTALL_ADDRESS;
 
 		while (true) {
 			usleep(9000);
 
-			considerApplyingSDCheats();
+			// considerApplyingSDCheats();
 			// log_print("Running code handler...\n");
 			codeHandlerFunction();
 
