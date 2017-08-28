@@ -1503,7 +1503,6 @@ static int startTCPGeckoThread(int argc, void *argv) {
 
 	// Execute the code handler if it is installed
 	if (isCodeHandlerInstalled) {
-		considerApplyingSDCheats();
 		log_print("Code handler installed...\n");
 		void (*codeHandlerFunction)() = (void (*)()) CODE_HANDLER_INSTALL_ADDRESS;
 
@@ -1518,6 +1517,8 @@ static int startTCPGeckoThread(int argc, void *argv) {
 			if (assemblySize > 0) {
 				executeAssembly();
 			}
+
+			considerApplyingSDCheats();
 		}
 	} else {
 		log_print("Code handler not installed...\n");
