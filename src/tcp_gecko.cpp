@@ -1513,6 +1513,7 @@ static int startTCPGeckoThread(int argc, void *argv) {
 			// considerApplyingSDCheats();
 			// log_print("Running code handler...\n");
 			codeHandlerFunction();
+			// log_print("Code handler done executing...\n");
 
 			if (assemblySize > 0) {
 				executeAssembly();

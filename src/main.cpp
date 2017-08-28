@@ -20,7 +20,6 @@
 #include "patcher/function_patcher_gx2.h"
 #include "patcher/function_patcher_coreinit.h"
 #include "utils/sd_ip_reader.hpp"
-#include "sd_cheats.h"
 
 bool isCodeHandlerInstalled;
 
