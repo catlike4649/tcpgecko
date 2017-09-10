@@ -20,6 +20,7 @@
 #include "patcher/function_patcher_gx2.h"
 #include "patcher/function_patcher_coreinit.h"
 #include "utils/sd_ip_reader.hpp"
+#include "fs/sd_fat_devoptab.h"
 
 bool isCodeHandlerInstalled;
 
@@ -33,6 +34,18 @@ typedef enum {
 void applyFunctionPatches() {
 	patchIndividualMethodHooks(method_hooks_gx2, method_hooks_size_gx2, method_calls_gx2);
 	patchIndividualMethodHooks(method_hooks_coreinit, method_hooks_size_coreinit, method_calls_coreinit);
+}
+
+bool isSDAccessEnabled() {
+	int result = mount_sd_fat("sd");
+
+	if (result < 0) {
+		return false;
+	}
+
+	unmount_sd_fat("sd");
+
+	return true;
 }
 
 /* Entry point */
@@ -105,7 +118,7 @@ int Menu_Main(void) {
 	char messageBuffer[80];
 	int launchMethod;
 	int update_screen = 1;
-	int vpadError = -1;
+	s32 vpadError = -1;
 	VPADData vpad_data;
 
 	while (true) {
@@ -125,6 +138,18 @@ int Menu_Main(void) {
 			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
 			PRINT_TEXT2(7, 2, ipAddressMessageBuffer)
 			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko (with built-in code handler)...")
+
+			PRINT_TEXT2(0, 8, "Note:")
+			PRINT_TEXT2(0, 9, "* You can enable loading SD cheats with Mocha SD access")
+			PRINT_TEXT2(0, 10, "* Generate and store GCTUs to your SD card with JGecko U")
+
+			// testMount();
+			/*if (isSDAccessEnabled()) {
+				PRINT_TEXT2(0, 8, "SD card access: SD cheats will be applied automatically when titles are loaded!")
+			} else {
+				PRINT_TEXT2(0, 8, "No SD card access: Please run Mocha SD Access by maschell for SD cheat support...")
+			}*/
+
 			PRINT_TEXT2(0, 17, "Press Home to exit...")
 
 			OSScreenFlipBuffersEx(0);

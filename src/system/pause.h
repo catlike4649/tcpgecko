@@ -14,7 +14,7 @@ unsigned long getConsoleStatePatchAddress() {
 	} else {
 		// Acquire the RPL and function
 		log_print("Acquiring...\n");
-		unsigned int avm_handle;
+		u32 avm_handle;
 		OSDynLoad_Acquire("avm.rpl", &avm_handle);
 		ASSERT_ALLOCATED(avm_handle, "avm.rpl")
 		OSDynLoad_FindExport((u32) avm_handle, 0, "AVMGetDRCScanMode", &AVMGetDRCScanMode);

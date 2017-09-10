@@ -6,6 +6,8 @@
 #include "dynamic_libs/os_functions.h"
 #include "tcp_gecko.h"
 #include "kernel/syscalls.h"
+#include <fat.h>
+#include <iosuhax.h>
 
 #define CODE_HANDLER_ENABLED_ADDRESS 0x10014CFC
 #define CODE_LIST_START_ADDRESS 0x01133000
@@ -38,8 +40,28 @@ void setCodeHandlerEnabled(bool enabled) {
 	log_printf("Code handler status: %i\n", enabled);
 }
 
+/*void testMount() {
+	int res = IOSUHAX_Open(NULL);
+	log_printf("Result: %i", res);
+
+	if (res < 0) {//
+		mount_sd_fat("sd"); // Fallback to normal OS implementation
+	} else {
+		fatInitDefault(); // using libfat
+	}
+
+	log_print("Unmounting...");
+	fatUnmount("sd");
+	fatUnmount("usb");
+	log_print("Closing...");
+	IOSUHAX_Close();
+	log_print("DONE");
+}*/
+
 void considerApplyingSDCheats() {
 	u64 currentTitleID = OSGetTitleID();
+
+	// testMount();
 
 	if (cachedTitleID == currentTitleID) {
 		// log_print("Title ID NOT changed\n");
@@ -70,7 +92,7 @@ void considerApplyingSDCheats() {
 		log_printf("File Path: %s\n", filePath);
 
 		unsigned char *codes = NULL;
-		unsigned int codesSize = 0;
+		u32 codesSize = 0;
 		result = LoadFileToMem((const char *) filePath, &codes, &codesSize);
 
 		if (result < 0) {

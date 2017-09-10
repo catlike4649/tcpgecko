@@ -151,7 +151,7 @@ int CFile::seek(long int offset, int origin) {
 	return ret;
 }
 
-int CFile::fwrite(const char *format, ...) {
+/*int CFile::fwrite(const char *format, ...) {
 	int result = -1;
 	char *tmp = NULL;
 
@@ -166,6 +166,5 @@ int CFile::fwrite(const char *format, ...) {
 		free(tmp);
 
 	return result;
-}
-
+}*/
 

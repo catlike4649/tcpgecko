@@ -81,9 +81,9 @@ struct pygecko_bss_t {
 #define COMMAND_CLEAR_ASSEMBLY 0xE2
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
-#define errno (*__gh_errno_ptr())
+// #define errno (*__gh_errno_ptr())
 #define MSG_DONT_WAIT 32
-#define EWOULDBLOCK 6
+// #define EWOULDBLOCK 6
 // #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
 #define SERVER_VERSION "06/03/2017"
 #define ONLY_ZEROS_READ 0xB0
@@ -1039,7 +1039,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 			}
 			case COMMAND_ACCOUNT_IDENTIFIER: {
 				// Acquire the RPL
-				unsigned int nn_act_handle;
+				u32 nn_act_handle;
 				OSDynLoad_Acquire("nn_act.rpl", &nn_act_handle);
 
 				// Acquire the functions via their mangled file names
@@ -1165,7 +1165,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				char *symbolName = (char *) (&buffer[0] + ((int *) buffer)[1]);
 
 				/* Get the symbol and store it in the buffer */
-				unsigned int module_handle, function_address;
+				u32 module_handle, function_address;
 				OSDynLoad_Acquire(rplName, &module_handle);
 
 				char data = (char) recvbyte(bss, clientfd);
@@ -1479,7 +1479,7 @@ static int runTCPGeckoServer(int argc, void *argv) {
 	return 0;
 }
 
-static int startTCPGeckoThread(int argc, void *argv) {
+static s32 startTCPGeckoThread(s32 argc, void *argv) {
 	log_print("Starting TCP Gecko thread...\n");
 
 	// Run the TCP Gecko Installer server
@@ -1539,10 +1539,10 @@ void startTCPGecko() {
 	void *thread = memalign(0x40, 0x1000);
 	ASSERT_ALLOCATED(thread, "TCP Gecko thread")
 
-	int status = OSCreateThread(thread, startTCPGeckoThread, 1,
-								NULL, (u32) stack + sizeof(stack),
+	int status = OSCreateThread(thread, startTCPGeckoThread, (s32) 1,
+								NULL, (s32) (stack + sizeof(stack)),
 								sizeof(stack), 0,
-								OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY | OS_THREAD_ATTR_DETACH);
+								(OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY | OS_THREAD_ATTR_DETACH));
 	ASSERT_INTEGER(status, 1, "Creating TCP Gecko thread")
 	// OSSetThreadName(thread, "TCP Gecko");
 	OSResumeThread(thread);

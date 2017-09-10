@@ -50,7 +50,7 @@ int readKernelMemory(const void *address) {
 
 #define KERNEL_COPY_SOURCE_ADDRESS 0x10100000
 
-int kernelCopyService(int argc, void *argv) {
+s32 kernelCopyService(s32 argc, void *argv) {
 	while (true) {
 		// Read the destination address from the source address
 		int destinationAddress = *(int *) KERNEL_COPY_SOURCE_ADDRESS;
