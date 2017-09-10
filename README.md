@@ -13,6 +13,9 @@ No. Both projects are fundamentally different.
 # How do I compile?
 Just like described [here](https://github.com/dimok789/homebrew_launcher/blob/master/README.md#building-the-homebrew-launcher).
 
+Also note that you need `devkitPro r27` and not the latest version. Older versions like `r27` can be downloaded from [here](https://sourceforge.net/projects/devkitpro/files/devkitPPC/).
+Furthermore, you need to `make install` [`iosuhax`](https://github.com/dimok789/libiosuhax) since it is a dependency as well.
+
 # Credits
 **dimok** for Homebrew Launcher project engine/base  
 **BullyWiiPlaza** for further development of advanced/efficient features  

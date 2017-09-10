@@ -32,7 +32,7 @@
 #include <wchar.h>
 #include <gctypes.h>
 
-const char * fmt(const char * format, ...)
+/*const char * fmt(const char * format, ...)
 {
 	static char strChar[512];
 	strChar[0] = 0;
@@ -204,4 +204,4 @@ std::vector<std::string> stringSplit(const std::string & inValue, const std::str
         value = value.substr(index + splitter.size(), value.length());
     }
     return result;
-}
+}*/

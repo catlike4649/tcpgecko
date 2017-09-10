@@ -81,9 +81,9 @@ struct pygecko_bss_t {
 #define COMMAND_CLEAR_ASSEMBLY 0xE2
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
-// #define errno (*__gh_errno_ptr())
+#define errno (*__gh_errno_ptr())
 #define MSG_DONT_WAIT 32
-// #define EWOULDBLOCK 6
+#define EWOULDBLOCK 6
 // #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
 #define SERVER_VERSION "06/03/2017"
 #define ONLY_ZEROS_READ 0xB0
