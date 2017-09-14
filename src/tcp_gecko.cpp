@@ -1,5 +1,5 @@
 #include "tcp_gecko.h"
-#include <iosuhax.h>
+// #include <iosuhax.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -91,7 +91,7 @@ struct pygecko_bss_t {
 
 #define VERSION_HASH 0x7FB223
 
-ZEXTERN int ZEXPORT
+/*ZEXTERN int ZEXPORT
 deflateEnd OF((z_streamp
 strm));
 ZEXTERN int ZEXPORT
@@ -103,7 +103,7 @@ ZEXTERN int ZEXPORT
 deflate OF((z_streamp
 strm,
 int flush
-));
+));*/
 
 // ########## Being socket_functions.h ############
 
@@ -547,45 +547,45 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				break;
 			}
-			case COMMAND_READ_MEMORY_COMPRESSED: {
-				// Receive the starting address and length
-				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
-				CHECK_ERROR(ret < 0)
-				int startingAddress = ((int *) buffer)[0];
-				unsigned int inputLength = ((unsigned int *) buffer)[1];
+				/*case COMMAND_READ_MEMORY_COMPRESSED: {
+					// Receive the starting address and length
+					ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
+					CHECK_ERROR(ret < 0)
+					int startingAddress = ((int *) buffer)[0];
+					unsigned int inputLength = ((unsigned int *) buffer)[1];
 
-				z_stream stream;
-				memset(&stream, 0, sizeof(stream));
-				stream.zalloc = Z_NULL;
-				stream.zfree = Z_NULL;
-				stream.opaque = Z_NULL;
+					z_stream stream;
+					memset(&stream, 0, sizeof(stream));
+					stream.zalloc = Z_NULL;
+					stream.zfree = Z_NULL;
+					stream.opaque = Z_NULL;
 
-				// Initialize the stream struct
-				ret = deflateInit(&stream, Z_BEST_COMPRESSION);
-				ASSERT_INTEGER(ret, Z_OK, "deflateInit")
+					// Initialize the stream struct
+					ret = deflateInit(&stream, Z_BEST_COMPRESSION);
+					ASSERT_INTEGER(ret, Z_OK, "deflateInit")
 
-				// Supply the data
-				stream.avail_in = inputLength;
-				stream.next_in = (Bytef *) startingAddress;
-				stream.avail_out = DATA_BUFFER_SIZE;
-				void *outputBuffer = (void *) (&buffer + 4);
-				stream.next_out = (Bytef *) outputBuffer;
+					// Supply the data
+					stream.avail_in = inputLength;
+					stream.next_in = (Bytef *) startingAddress;
+					stream.avail_out = DATA_BUFFER_SIZE;
+					void *outputBuffer = (void *) (&buffer + 4);
+					stream.next_out = (Bytef *) outputBuffer;
 
-				// Deflate
-				ret = deflate(&stream, Z_FINISH);
-				ASSERT_INTEGER(ret, Z_OK, "deflate");
+					// Deflate
+					ret = deflate(&stream, Z_FINISH);
+					ASSERT_INTEGER(ret, Z_OK, "deflate");
 
-				// Finish
-				ret = deflateEnd(&stream);
-				ASSERT_INTEGER(ret, Z_OK, "deflateEnd");
+					// Finish
+					ret = deflateEnd(&stream);
+					ASSERT_INTEGER(ret, Z_OK, "deflateEnd");
 
-				// Send the compressed buffer size and content
-				int deflatedSize = stream.total_out;
-				((int *) buffer)[0] = deflatedSize;
-				ret = sendwait(bss, clientfd, buffer, 4 + deflatedSize);
-				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Compressed data)")
+					// Send the compressed buffer size and content
+					int deflatedSize = stream.total_out;
+					((int *) buffer)[0] = deflatedSize;
+					ret = sendwait(bss, clientfd, buffer, 4 + deflatedSize);
+					ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Compressed data)")
 
-				break;
+					break;*/
 
 				// https://www.gamedev.net/resources/_/technical/game-programming/in-memory-data-compression-and-decompression-r2279
 				/*
@@ -620,7 +620,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				OSFreeToSystem(compressedBuffer);
 
 				break;*/
-			}
+				// }
 			case COMMAND_KERNEL_WRITE: {
 				ret = recvwait(bss, clientfd, buffer, sizeof(int) * 2);
 				CHECK_ERROR(ret < 0)
@@ -1098,21 +1098,29 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				}
 
 				int destinationAddress = baseAddress;
-				// Apply pointer offsets
-				for (offsetIndex = 0; offsetIndex < offsetsCount; offsetIndex++) {
-					int pointerValue = *(int *) destinationAddress;
-					int offset = offsets[offsetIndex];
-					destinationAddress = pointerValue + offset;
 
-					// Validate the pointer address
-					bool isValidDestinationAddress = isValidDataAddress(destinationAddress);
+#define INVALID_ADDRESS -1
 
-					// Bail out if invalid
-					if (!isValidDestinationAddress) {
-						destinationAddress = -1;
+				if ((bool) OSIsAddressValid((const void *) destinationAddress)) {
+					// Apply pointer offsets
+					for (offsetIndex = 0; offsetIndex < offsetsCount; offsetIndex++) {
+						int pointerValue = *(int *) destinationAddress;
+						int offset = offsets[offsetIndex];
+						destinationAddress = pointerValue + offset;
 
-						break;
+						// Validate the pointer address
+						bool isValidDestinationAddress = (bool) OSIsAddressValid((const void *) destinationAddress);
+
+						// Bail out if invalid
+						if (!isValidDestinationAddress) {
+							destinationAddress = INVALID_ADDRESS;
+
+							break;
+						}
 					}
+				} else if (offsetsCount > 0) {
+					// Following pointers failed
+					destinationAddress = INVALID_ADDRESS;
 				}
 
 				// Return the destination address
@@ -1128,14 +1136,14 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_REMOTE_PROCEDURE_CALL: {
-				long long (*fun)(int, int, int, int, int, int, int, int);
+				long long (*function)(int, int, int, int, int, int, int, int);
 				int r3, r4, r5, r6, r7, r8, r9, r10;
 				long long result;
 
 				ret = recvwait(bss, clientfd, buffer, 4 + 8 * 4);
 				CHECK_ERROR(ret < 0);
 
-				fun = (long long int (*)(int, int, int, int, int, int, int, int)) ((void **) buffer)[0];
+				function = (long long int (*)(int, int, int, int, int, int, int, int)) ((void **) buffer)[0];
 				r3 = ((int *) buffer)[1];
 				r4 = ((int *) buffer)[2];
 				r5 = ((int *) buffer)[3];
@@ -1145,7 +1153,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				r9 = ((int *) buffer)[7];
 				r10 = ((int *) buffer)[8];
 
-				result = fun(r3, r4, r5, r6, r7, r8, r9, r10);
+				result = function(r3, r4, r5, r6, r7, r8, r9, r10);
 
 				((long long *) buffer)[0] = result;
 				ret = sendwait(bss, clientfd, buffer, 8);
@@ -1381,7 +1389,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_GET_ENTRY_POINT_ADDRESS: {
-				u32 *entryPointAddress = (u32 *) *((u32 *) OS_SPECIFICS->addr_OSTitle_main_entry);
+				u32 *entryPointAddress = (u32 * ) * ((u32 * )OS_SPECIFICS->addr_OSTitle_main_entry);
 				((u32 *) buffer)[0] = (u32) entryPointAddress;
 				ret = sendwait(bss, clientfd, buffer, sizeof(int));
 				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait (Entry point address)");
@@ -1487,7 +1495,7 @@ static s32 startTCPGeckoThread(s32 argc, void *argv) {
 
 	bss = (struct pygecko_bss_t *) memalign(0x40, sizeof(struct pygecko_bss_t));
 	if (bss == 0)
-		return 0;
+		return (s32) 0;
 	memset(bss, 0, sizeof(struct pygecko_bss_t));
 
 	if (OSCreateThread(&bss->thread, (s32 (*)(s32, void *)) runTCPGeckoServer, 1, bss,
@@ -1518,13 +1526,15 @@ static s32 startTCPGeckoThread(s32 argc, void *argv) {
 				executeAssembly();
 			}
 
-			considerApplyingSDCheats();
+			if (areSDCheatsEnabled) {
+				considerApplyingSDCheats();
+			}
 		}
 	} else {
 		log_print("Code handler not installed...\n");
 	}
 
-	return 0;
+	return (s32) 0;
 }
 
 void startTCPGecko() {
@@ -1540,9 +1550,10 @@ void startTCPGecko() {
 	ASSERT_ALLOCATED(thread, "TCP Gecko thread")
 
 	int status = OSCreateThread(thread, startTCPGeckoThread, (s32) 1,
-								NULL, (s32) (stack + sizeof(stack)),
+								NULL, (s32)(stack + sizeof(stack)),
 								sizeof(stack), 0,
-								(OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY | OS_THREAD_ATTR_DETACH));
+								(OS_THREAD_ATTR_AFFINITY_CORE1 | OS_THREAD_ATTR_PINNED_AFFINITY |
+								 OS_THREAD_ATTR_DETACH));
 	ASSERT_INTEGER(status, 1, "Creating TCP Gecko thread")
 	// OSSetThreadName(thread, "TCP Gecko");
 	OSResumeThread(thread);

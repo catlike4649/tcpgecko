@@ -20,11 +20,9 @@
 #include "patcher/function_patcher_gx2.h"
 #include "patcher/function_patcher_coreinit.h"
 #include "utils/sd_ip_reader.hpp"
-#include "fs/sd_fat_devoptab.h"
 
-bool isCodeHandlerInstalled;
-
-#define PRINT_TEXT2(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
+bool isCodeHandlerInstalled = false;
+bool areSDCheatsEnabled = false;
 
 typedef enum {
 	EXIT,
@@ -36,16 +34,38 @@ void applyFunctionPatches() {
 	patchIndividualMethodHooks(method_hooks_coreinit, method_hooks_size_coreinit, method_calls_coreinit);
 }
 
-bool isSDAccessEnabled() {
-	int result = mount_sd_fat("sd");
+void installCodeHandler() {
+	unsigned int physicalCodeHandlerAddress = (unsigned int) OSEffectiveToPhysical(
+			(void *) CODE_HANDLER_INSTALL_ADDRESS);
+	SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (unsigned int) codeHandler, codeHandlerLength);
+	DCFlushRange((const void *) CODE_HANDLER_INSTALL_ADDRESS, (u32) codeHandlerLength);
+	isCodeHandlerInstalled = true;
+}
 
-	if (result < 0) {
-		return false;
-	}
+unsigned char *screenBuffer;
 
-	unmount_sd_fat("sd");
+#define PRINT_TEXT(x, y, ...) { snprintf(messageBuffer, 80, __VA_ARGS__); OSScreenPutFontEx(0, x, y, messageBuffer); OSScreenPutFontEx(1, x, y, messageBuffer); }
 
-	return true;
+void initializeScreen() {
+	// Init screen and screen buffers
+	OSScreenInit();
+	unsigned int screenBuffer0Size = OSScreenGetBufferSizeEx(0);
+	unsigned int screenBuffer1Size = OSScreenGetBufferSizeEx(1);
+
+	screenBuffer = (unsigned char *) MEM1_alloc(screenBuffer0Size + screenBuffer1Size, 0x40);
+
+	OSScreenSetBufferEx(0, screenBuffer);
+	OSScreenSetBufferEx(1, (screenBuffer + screenBuffer0Size));
+
+	OSScreenEnableEx(0, 1);
+	OSScreenEnableEx(1, 1);
+}
+
+void install() {
+	installCodeHandler();
+	initializeUDPLog();
+	log_print("Patching functions\n");
+	applyFunctionPatches();
 }
 
 /* Entry point */
@@ -99,49 +119,38 @@ int Menu_Main(void) {
 	// PatchMethodHooks();
 
 	memoryInitialize();
-
 	VPADInit();
-
-	// Init screen and screen buffers
-	OSScreenInit();
-	int screenBuffer0Size = OSScreenGetBufferSizeEx(0);
-	int screenBuffer1Size = OSScreenGetBufferSizeEx(1);
-
-	unsigned char *screenBuffer = (unsigned char *) MEM1_alloc(screenBuffer0Size + screenBuffer1Size, 0x40);
-
-	OSScreenSetBufferEx(0, screenBuffer);
-	OSScreenSetBufferEx(1, (screenBuffer + screenBuffer0Size));
-
-	OSScreenEnableEx(0, 1);
-	OSScreenEnableEx(1, 1);
+	initializeScreen();
 
 	char messageBuffer[80];
 	int launchMethod;
-	int update_screen = 1;
+	int shouldUpdateScreen = 1;
 	s32 vpadError = -1;
 	VPADData vpad_data;
 
 	while (true) {
 		VPADRead(0, &vpad_data, 1, &vpadError);
 
-		if (update_screen) {
+		if (shouldUpdateScreen) {
 			OSScreenClearBufferEx(0, 0);
 			OSScreenClearBufferEx(1, 0);
 
+			InitSocketFunctionPointers();
+
 			// Build the IP address message
 			char ipAddressMessageBuffer[64];
-			InitSocketFunctionPointers();
 			__os_snprintf(ipAddressMessageBuffer, 64, "Your Wii U's IP address: %i.%i.%i.%i",
 						  (hostIpAddress >> 24) & 0xFF, (hostIpAddress >> 16) & 0xFF, (hostIpAddress >> 8) & 0xFF,
 						  hostIpAddress & 0xFF);
 
-			PRINT_TEXT2(14, 1, "-- TCP Gecko Installer --")
-			PRINT_TEXT2(7, 2, ipAddressMessageBuffer)
-			PRINT_TEXT2(0, 5, "Press A to install TCP Gecko (with built-in code handler)...")
+			PRINT_TEXT(14, 1, "-- TCP Gecko Installer --")
+			PRINT_TEXT(7, 2, ipAddressMessageBuffer)
+			PRINT_TEXT(0, 5, "Press A to install TCP Gecko (with built-in code handler)...")
+			PRINT_TEXT(0, 6, "Press X to install TCP Gecko (with code handler and SD cheats)...")
 
-			PRINT_TEXT2(0, 8, "Note:")
-			PRINT_TEXT2(0, 9, "* You can enable loading SD cheats with Mocha SD access")
-			PRINT_TEXT2(0, 10, "* Generate and store GCTUs to your SD card with JGecko U")
+			PRINT_TEXT(0, 8, "Note:")
+			PRINT_TEXT(0, 9, "* You can enable loading SD cheats with Mocha SD access")
+			PRINT_TEXT(0, 10, "* Generate and store GCTUs to your SD card with JGecko U")
 
 			// testMount();
 			/*if (isSDAccessEnabled()) {
@@ -150,7 +159,7 @@ int Menu_Main(void) {
 				PRINT_TEXT2(0, 8, "No SD card access: Please run Mocha SD Access by maschell for SD cheat support...")
 			}*/
 
-			PRINT_TEXT2(0, 17, "Press Home to exit...")
+			PRINT_TEXT(0, 17, "Press Home to exit...")
 
 			OSScreenFlipBuffersEx(0);
 			OSScreenFlipBuffersEx(1);
@@ -163,27 +172,22 @@ int Menu_Main(void) {
 			launchMethod = EXIT;
 
 			break;
-		}
-
-		// A Button pressed
-		if (pressedButtons & VPAD_BUTTON_A) {
-			unsigned int physicalCodeHandlerAddress = (unsigned int) OSEffectiveToPhysical(
-					(void *) CODE_HANDLER_INSTALL_ADDRESS);
-			SC0x25_KernelCopyData((u32) physicalCodeHandlerAddress, (unsigned int) codeHandler, codeHandlerLength);
-			DCFlushRange((const void *) CODE_HANDLER_INSTALL_ADDRESS, (u32) codeHandlerLength);
-
-			isCodeHandlerInstalled = true;
+		} else if (pressedButtons & VPAD_BUTTON_A) {
+			install();
 			launchMethod = TCP_GECKO;
-			initializeUDPLog();
-			log_print("Patching functions\n");
-			applyFunctionPatches();
+
+			break;
+		} else if (pressedButtons & VPAD_BUTTON_X) {
+			install();
+			launchMethod = TCP_GECKO;
+			areSDCheatsEnabled = true;
 
 			break;
 		}
 
-		// Button pressed ?
-		update_screen = (pressedButtons & (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN))
-						? 1 : 0;
+		// Button pressed?
+		shouldUpdateScreen = (pressedButtons &
+							  (VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN)) ? 1 : 0;
 		usleep(20 * 1000);
 	}
 
@@ -191,16 +195,17 @@ int Menu_Main(void) {
 	asm volatile ("mr 2,  %0" : : "r" (old_sdata2_start));
 
 	MEM1_free(screenBuffer);
-	screenBuffer = NULL;
 
 	memoryRelease();
 
 	if (launchMethod == EXIT) {
-		// RestoreInstructions();
+		// Exit the installer
 		return EXIT_SUCCESS;
 	} else {
+		// Launch system menu
 		SYSLaunchMenu();
 	}
 
+	// For each title load, relaunch the TCP Gecko
 	return EXIT_RELAUNCH_ON_LOAD;
 }

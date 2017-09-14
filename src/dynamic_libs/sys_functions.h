@@ -30,14 +30,16 @@ extern "C" {
 
 void InitSysFunctionPointers(void);
 
-extern void(*_SYSLaunchTitleByPathFromLauncher)(const char* path, int len, int zero);
-extern int (* SYSRelaunchTitle)(int argc, char* argv);
-extern int (* SYSLaunchMenu)(void);
-extern int (* SYSCheckTitleExists)(u64 titleId);
+extern void (*_SYSLaunchTitleByPathFromLauncher)(const char *path, int len, int zero);
 
+extern int (*SYSRelaunchTitle)(int argc, char *argv);
+
+extern int (*SYSLaunchMenu)(void);
+
+extern int (*SYSCheckTitleExists)(u64 titleId);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __SYS_FUNCTIONS_H_
+#endif
