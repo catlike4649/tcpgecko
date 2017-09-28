@@ -156,7 +156,7 @@ int cafiine_send_handle(int sock, const char *path, int handle) {
 	return -1;
 }
 
-int cafiine_fopen(int sock, int *result, const char *path, const char *mode, int *handle) {
+/*int cafiine_fopen(int sock, int *result, const char *path, const char *mode, int *handle) {
 	while (iLock)
 		usleep(5000);
 	iLock = 1;
@@ -201,7 +201,7 @@ int cafiine_fopen(int sock, int *result, const char *path, const char *mode, int
 	error:
 	iLock = 0;
 	return final_result;
-}
+}*/
 
 void cafiine_send_file(int sock, char *file, int size, int fd) {
 	while (iLock)
@@ -481,7 +481,7 @@ int recvwait(int sock, void *buffer, int len) {
 		ret = recv(sock, buffer, len, 0);
 		CHECK_ERROR(ret < 0);
 		len -= ret;
-		buffer += ret;
+		buffer = &buffer + ret;
 	}
 	return 0;
 	error:
@@ -494,7 +494,7 @@ int recvwaitlen(int sock, void *buffer, int len) {
 		ret = recv(sock, buffer, len, 0);
 		CHECK_ERROR(ret < 0);
 		len -= ret;
-		buffer += ret;
+		buffer = &buffer + ret;
 	}
 	return 0;
 	error:
@@ -517,7 +517,7 @@ int sendwait(int sock, const void *buffer, int len) {
 		ret = send(sock, buffer, len, 0);
 		CHECK_ERROR(ret < 0);
 		len -= ret;
-		buffer += ret;
+		buffer = &buffer + ret;
 	}
 	return 0;
 	error:
