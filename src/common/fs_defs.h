@@ -2,7 +2,6 @@
 #define	FS_DEFS_H
 
 #include "types.h"
-#include "kernel_types.h"
 
 #ifdef __cplusplus
 extern "C" {

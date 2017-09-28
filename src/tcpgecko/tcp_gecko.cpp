@@ -4,24 +4,24 @@
 #include <stdlib.h>
 #include <stdio.h>
 // #include <inttypes.h>
-#include "common/common.h"
+#include "../common/common.h"
 #include <zlib.h> // Actually must be included before os_functions
-#include "dynamic_libs/os_functions.h"
+#include "../dynamic_libs/os_functions.h"
 #include <string.h>
 #include <malloc.h>
 #include "main.h"
-#include "dynamic_libs/socket_functions.h"
-#include "dynamic_libs/gx2_functions.h"
-#include "dynamic_libs/fs_functions.h"
-#include "utils/logger.h"
-#include "system/hardware_breakpoints.h"
-#include "utils/linked_list.h"
-#include "system/address.h"
-#include "system/stack.h"
-#include "system/pause.h"
-#include "utils/sd_ip_reader.hpp"
-#include "patcher/function_patcher_gx2.h"
-#include "system/raw_assembly_cheats.h"
+#include "../dynamic_libs/socket_functions.h"
+#include "../dynamic_libs/gx2_functions.h"
+#include "../dynamic_libs/fs_functions.h"
+#include "../utils/logger.h"
+#include "hardware_breakpoints.hpp"
+#include "linked_list.h"
+#include "address.h"
+#include "stack.h"
+#include "pause.h"
+#include "sd_ip_reader.h"
+#include "../patcher/function_patcher_gx2.h"
+#include "raw_assembly_cheats.h"
 #include "sd_cheats.h"
 
 void *client;
@@ -81,9 +81,9 @@ struct pygecko_bss_t {
 #define COMMAND_CLEAR_ASSEMBLY 0xE2
 
 #define CHECK_ERROR(cond) if (cond) { bss->line = __LINE__; goto error; }
-#define errno (*__gh_errno_ptr())
+#define errno2 (*__gh_errno_ptr())
 #define MSG_DONT_WAIT 32
-#define EWOULDBLOCK 6
+#define E_WOULD_BLOCK 6
 // #define WRITE_SCREEN_MESSAGE_BUFFER_SIZE 100
 #define SERVER_VERSION "06/03/2017"
 #define ONLY_ZEROS_READ 0xB0
@@ -242,8 +242,9 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 		ret = checkbyte(clientfd);
 
 		if (ret < 0) {
-			CHECK_ERROR(errno != EWOULDBLOCK);
+			CHECK_ERROR(errno2 != E_WOULD_BLOCK);
 			GX2WaitForVsync();
+
 			continue;
 		}
 
@@ -729,8 +730,11 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_GET_DATA_BUFFER_SIZE: {
+				log_printf("COMMAND_GET_DATA_BUFFER_SIZE...\n");
 				((int *) buffer)[0] = DATA_BUFFER_SIZE;
+				log_printf("Sending buffer size...\n");
 				ret = sendwait(bss, clientfd, buffer, sizeof(int));
+				log_printf("Sent: %i\n", ret);
 				CHECK_ERROR(ret < 0)
 
 				break;
@@ -798,7 +802,7 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 
 				considerInitializingFileSystem();
 
-				int handle;
+				s32 handle;
 				FSDirEntry entry;
 
 				ret = FSOpenDir(client, commandBlock, directory_path, &handle, FS_RET_ALL_ERROR);
@@ -1136,13 +1140,14 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				break;
 			}
 			case COMMAND_REMOTE_PROCEDURE_CALL: {
-				long long (*function)(int, int, int, int, int, int, int, int);
 				int r3, r4, r5, r6, r7, r8, r9, r10;
-				long long result;
 
-				ret = recvwait(bss, clientfd, buffer, 4 + 8 * 4);
-				CHECK_ERROR(ret < 0);
+				log_print("Receiving RPC information...\n");
+				ret = recvwait(bss, clientfd, buffer, sizeof(int) + 8 * sizeof(int));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "revcwait() Receiving RPC information")
+				log_print("RPC information received...\n");
 
+				long long (*function)(int, int, int, int, int, int, int, int);
 				function = (long long int (*)(int, int, int, int, int, int, int, int)) ((void **) buffer)[0];
 				r3 = ((int *) buffer)[1];
 				r4 = ((int *) buffer)[2];
@@ -1153,11 +1158,16 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				r9 = ((int *) buffer)[7];
 				r10 = ((int *) buffer)[8];
 
-				result = function(r3, r4, r5, r6, r7, r8, r9, r10);
+				log_print("Calling function...\n");
+				long long result = function(r3, r4, r5, r6, r7, r8, r9, r10);
+				log_printf("Function successfully called with return value: 0x%08x 0x%08x\n", (int) (result >> 32),
+						   (int) result);
 
+				log_print("Sending result...\n");
 				((long long *) buffer)[0] = result;
-				ret = sendwait(bss, clientfd, buffer, 8);
-				CHECK_ERROR(ret < 0)
+				ret = sendwait(bss, clientfd, buffer, sizeof(long long));
+				ASSERT_FUNCTION_SUCCEEDED(ret, "sendwait() Sending return value")
+				log_print("Result successfully sent...\n");
 
 				break;
 			}
@@ -1457,9 +1467,10 @@ static int runTCPGeckoServer(int argc, void *argv) {
 		CHECK_ERROR(ret < 0)
 
 		while (true) {
-			log_printf("accept()...\n");
 			len = 16;
+			log_printf("before accept()...\n");
 			clientfd = accept(sockfd, (struct sockaddr *) &socketAddress, (s32 * ) & len);
+			log_printf("after accept()...\n");
 			CHECK_ERROR(clientfd == -1)
 			log_printf("commands()...\n");
 			ret = processCommands(bss, clientfd);

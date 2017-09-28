@@ -1,7 +1,9 @@
+#include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+#include <wchar.h>
+#include <gctypes.h>
 #include "../dynamic_libs/os_functions.h"
 #include "../dynamic_libs/socket_functions.h"
 #include "logger.h"

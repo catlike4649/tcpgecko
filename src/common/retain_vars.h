@@ -1,7 +1,6 @@
 #ifndef RETAINS_VARS_H_
 #define RETAINS_VARS_H_
 #include <gctypes.h>
-#include "kernel_types.h"
 
 extern u8 gSettingLaunchPyGecko;
 extern u8 gSettingUseUpdatepath;

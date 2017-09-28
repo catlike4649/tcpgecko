@@ -31,7 +31,7 @@ EXPORT_DECL(int, SYSCheckTitleExists, u64 titleId);
 void InitSysFunctionPointers(void)
 {
     unsigned int *funcPointer = 0;
-    unsigned int sysapp_handle;
+    u32 sysapp_handle;
     OSDynLoad_Acquire("sysapp.rpl", &sysapp_handle);
 
     OS_FIND_EXPORT(sysapp_handle, _SYSLaunchTitleByPathFromLauncher);

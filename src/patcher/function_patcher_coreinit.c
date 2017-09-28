@@ -11,7 +11,7 @@ declareFunctionHook(int, FSOpenFileAsync, void *pClient, void *pCmd, const char 
 	return real_FSOpenFileAsync(pClient, pCmd, path, mode, handle, error, asyncParams);
 }
 
-declareFunctionHook(int, FSOpenDir, void *pClient, void *pCmd, const char *path, int *dh, int errHandling) {
+declareFunctionHook(int, FSOpenDir, void *pClient, void *pCmd, const char *path, s32 *dh, int errHandling) {
 	log_printf("FSOpenDir(): %s", path);
 	return real_FSOpenDir(pClient, pCmd, path, dh, errHandling);
 }

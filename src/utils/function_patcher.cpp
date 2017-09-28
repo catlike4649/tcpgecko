@@ -215,6 +215,7 @@ bool isDynamicFunction(unsigned int physicalAddress) {
 
 unsigned int getRPLHandle(int library, const char *functionName) {
 	unsigned int rplHandle = 0;
+	u32 gx2_handle = 0;
 
 	switch (library) {
 		case LIB_CORE_INIT:
@@ -228,7 +229,6 @@ unsigned int getRPLHandle(int library, const char *functionName) {
 
 		case LIB_GX2:
 			if (DEBUG_LOG_DYN)log_printf("FindExport of %s! From LIB_GX2\n", functionName);
-			unsigned int gx2_handle = 0;
 			OSDynLoad_Acquire("gx2.rpl", &gx2_handle);
 			if (gx2_handle == 0) {
 				log_print("LIB_GX2 not acquired\n");

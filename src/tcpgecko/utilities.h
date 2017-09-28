@@ -4,7 +4,6 @@
 #include "../dynamic_libs/os_functions.h"
 #include "../utils/logger.h"
 #include "kernel.h"
-#include "../common/kernel_types.h"
 
 void writeCode(u32 address, u32 instruction) {
 	u32 *pointer = (u32 *) (address + 0xA0000000);

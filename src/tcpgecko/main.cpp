@@ -5,21 +5,23 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include "dynamic_libs/os_functions.h"
-#include "dynamic_libs/fs_functions.h"
-#include "dynamic_libs/sys_functions.h"
-#include "dynamic_libs/vpad_functions.h"
-#include "dynamic_libs/socket_functions.h"
-#include "kernel/kernel_functions.h"
-#include "system/memory.h"
-#include "common/common.h"
+#include "../dynamic_libs/os_functions.h"
+#include "../dynamic_libs/fs_functions.h"
+#include "../dynamic_libs/sys_functions.h"
+#include "../dynamic_libs/vpad_functions.h"
+#include "../dynamic_libs/socket_functions.h"
+#include "../kernel/kernel_functions.h"
+#include "../system/memory.h"
+#include "../common/common.h"
 #include "main.h"
 #include "code_handler.h"
-#include "utils/logger.h"
-#include "utils/function_patcher.h"
-#include "patcher/function_patcher_gx2.h"
-#include "patcher/function_patcher_coreinit.h"
-#include "utils/sd_ip_reader.hpp"
+#include "../utils/logger.h"
+#include "../utils/function_patcher.h"
+#include "../patcher/function_patcher_gx2.h"
+#include "../patcher/function_patcher_coreinit.h"
+#include "sd_ip_reader.h"
+#include "title.h"
+#include "tcp_gecko.h"
 
 bool isCodeHandlerInstalled = false;
 bool areSDCheatsEnabled = false;

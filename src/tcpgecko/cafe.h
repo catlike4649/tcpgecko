@@ -1,8 +1,6 @@
 #ifndef TCPGECKO_STACK_H
 #define TCPGECKO_STACK_H
 
-#include "kernel_types.h"
-
 typedef struct OSThread;
 
 typedef struct OSThreadLink {

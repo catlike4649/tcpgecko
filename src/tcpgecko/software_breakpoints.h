@@ -4,7 +4,7 @@
 #define TCPGECKO_BREAKPOINT_EXECUTE_H
 
 #include "utilities.h"
-#include "exception_handler.h"
+#include "../system/exception_handler.h"
 
 #define OS_EXCEPTION_DSI 		2
 #define OS_EXCEPTION_ISI 		3
@@ -77,7 +77,7 @@ struct Breakpoint *getBreakpoint(u32 address, int size) {
 }
 
 void pokeRegisters(OSContext context, uint32_t gpr[32], double fpr[32]) {
-	memcpy(&context.gpr, &gpr, sizeof(gpr));
+	memcpy(&context.gpr, &gpr, 32 * sizeof(uint32_t));
 	// memcpy(&context.fpr, &fpr, sizeof(fpr));
 }
 

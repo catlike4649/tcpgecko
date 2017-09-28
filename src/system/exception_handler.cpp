@@ -77,7 +77,7 @@ static unsigned char exceptionCallback(void *c, unsigned char exception_type) {
 	register frame_rec_t l, p = (frame_rec_t) lr;
 
 	l = p;
-	p = r1;
+	p = (frame_rec_t) r1;
 	if (!p)
 			asm volatile("mr %0,%%r1" : "=r"(p));
 

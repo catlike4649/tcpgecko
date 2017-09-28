@@ -1,4 +1,4 @@
-#include "dynamic_libs/os_functions.h"
+#include "../dynamic_libs/os_functions.h"
 #include "title.h"
 
 bool isRunningTitleID(unsigned long long int japaneseTitleID) {

@@ -1,8 +1,8 @@
 #ifndef TCPGECKO_STACK_H
 #define TCPGECKO_STACK_H
 
-#include "../utils/linked_list.h"
-#include "../common/cafe.h"
+#include "linked_list.h"
+#include "cafe.h"
 
 bool isValidStackPointer(u32 stackPointer) {
 	return stackPointer >= 0x10000000 && stackPointer < 0x20000000;

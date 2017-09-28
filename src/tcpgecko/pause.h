@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../utils/logger.h"
-#include "../utils/assertions.h"
+#include "assertions.h"
 #include "../dynamic_libs/os_functions.h"
 #include "../common/fs_defs.h"
 #include "kernel.h"

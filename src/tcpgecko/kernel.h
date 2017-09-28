@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../kernel/syscalls.h"
-#include "../utils/assertions.h"
+#include "assertions.h"
 #include "../dynamic_libs/os_functions.h"
-#include "../tcp_gecko.h"
+#include "tcp_gecko.h"
 #include "../utils/logger.h"
 
 // TODO Variable size, not hard-coded

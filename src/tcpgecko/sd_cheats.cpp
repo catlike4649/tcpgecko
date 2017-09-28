@@ -1,11 +1,11 @@
 #include <stdio.h> // snprintf
 #include <string.h> // memcpy, memset
-#include "utils/logger.h"
-#include "fs/sd_fat_devoptab.h"
-#include "fs/fs_utils.h"
-#include "dynamic_libs/os_functions.h"
+#include "../utils/logger.h"
+#include "../fs/sd_fat_devoptab.h"
+#include "../fs/fs_utils.h"
+#include "../dynamic_libs/os_functions.h"
 #include "tcp_gecko.h"
-#include "kernel/syscalls.h"
+#include "../kernel/syscalls.h"
 #include <fat.h>
 #include <iosuhax.h>
 
@@ -103,7 +103,7 @@ void considerApplyingSDCheats() {
 		}
 
 		log_print("Copying...\n");
-		kernelCopyData2((unsigned char *) CODE_LIST_START_ADDRESS, codes, codesSize);
+		kernelCopyData2((unsigned char *) CODE_LIST_START_ADDRESS, codes, (unsigned int) codesSize);
 		log_print("Copied!\n");
 		setCodeHandlerEnabled(true);
 

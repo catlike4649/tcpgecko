@@ -1,11 +1,10 @@
-#include "../utils/stringify.h"
+#include "stringify.h"
 #include "../dynamic_libs/os_functions.h"
 #include "threads.h"
 #include "../utils/logger.h"
-#include "../main.h"
+#include "main.h"
 #include "utilities.h"
 #include "software_breakpoints.h"
-#include "../common/kernel_types.h"
 
 #ifndef TCPGECKO_BREAKPOINTS_H
 #define TCPGECKO_BREAKPOINTS_H

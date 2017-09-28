@@ -70,12 +70,12 @@ EXPORT_DECL(int, FSRollbackQuota, void *pClient, void *pCmd, const char *path, i
 
 EXPORT_DECL(int, FSRollbackQuotaAsync, void *pClient, void *pCmd, const char *path, int error, void *asyncParams);
 
-EXPORT_DECL(int, FSOpenDir, void *pClient, void *pCmd, const char *path, int *dh, int errHandling);
+EXPORT_DECL(int, FSOpenDir, void *pClient, void *pCmd, const char *path, s32 *dh, int errHandling);
 
 EXPORT_DECL(int, FSOpenDirAsync, void *pClient, void *pCmd, const char *path, int *handle, int error,
 			void *asyncParams);
 
-EXPORT_DECL(int, FSReadDir, void *pClient, void *pCmd, int dh, FSDirEntry * dir_entry, int errHandling);
+EXPORT_DECL(int, FSReadDir, void *pClient, void *pCmd, s32 dh, FSDirEntry * dir_entry, int errHandling);
 
 EXPORT_DECL(int, FSRewindDir, void *pClient, void *pCmd, int dh, int errHandling);
 

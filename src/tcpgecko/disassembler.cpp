@@ -1,10 +1,9 @@
-#include "disassembler.h"
-#include "../utils/assertions.h"
 #include "../dynamic_libs/os_functions.h"
+#include "assertions.h"
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdarg.h>
 
 char *disassemblerBuffer;
 void *disassemblerBufferPointer;
@@ -13,7 +12,7 @@ void *disassemblerBufferPointer;
 
 void formatDisassembled(char *format, ...) {
 	if (!disassemblerBuffer) {
-		disassemblerBuffer = malloc(DISASSEMBLER_BUFFER_SIZE);
+		disassemblerBuffer = (char *) malloc(DISASSEMBLER_BUFFER_SIZE);
 		ASSERT_ALLOCATED(disassemblerBuffer, "Disassembler buffer")
 		disassemblerBufferPointer = disassemblerBuffer;
 	}
@@ -27,7 +26,7 @@ void formatDisassembled(char *format, ...) {
 	va_end(variableArguments);
 
 	// Do not smash the buffer
-	long projectedSize = (void *) disassemblerBuffer - disassemblerBufferPointer + printedBytesCount;
+	long projectedSize = disassemblerBuffer - (char *) disassemblerBufferPointer + printedBytesCount;
 	if (projectedSize < DISASSEMBLER_BUFFER_SIZE) {
 		memcpy(disassemblerBuffer, temporaryBuffer, printedBytesCount);
 		disassemblerBuffer += printedBytesCount;

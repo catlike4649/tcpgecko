@@ -80,11 +80,11 @@ extern int (*FSRollbackQuota)(void *pClient, void *pCmd, const char *path, int e
 
 extern int (*FSRollbackQuotaAsync)(void *pClient, void *pCmd, const char *path, int error, void *asyncParams);
 
-extern int (*FSOpenDir)(void *pClient, void *pCmd, const char *path, int *dh, int errHandling);
+extern int (*FSOpenDir)(void *pClient, void *pCmd, const char *path, s32 *dh, int errHandling);
 
 extern int (*FSOpenDirAsync)(void *pClient, void *pCmd, const char *path, int *handle, int error, void *asyncParams);
 
-extern int (*FSReadDir)(void *pClient, void *pCmd, int dh, FSDirEntry *dir_entry, int errHandling);
+extern int (*FSReadDir)(void *pClient, void *pCmd, s32 dh, FSDirEntry *dir_entry, int errHandling);
 
 extern int (*FSRewindDir)(void *pClient, void *pCmd, int dh, int errHandling);
 

@@ -1,4 +1,4 @@
-#include "sd_ip_reader.hpp"
+#include "sd_ip_reader.h"
 
 char ipFromSd[16];
 bool hasReadIP = false;

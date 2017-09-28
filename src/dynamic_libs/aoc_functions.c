@@ -33,7 +33,7 @@ EXPORT_DECL(s32, AOC_CloseTitle, void * title);
 
 void InitAocFunctionPointers(void)
 {
-    unsigned int aoc_handle = 0;
+    u32 aoc_handle = 0;
     OSDynLoad_Acquire("nn_aoc.rpl", &aoc_handle);
 
     if(aoc_handle == 0)
