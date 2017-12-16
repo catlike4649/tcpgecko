@@ -14,7 +14,7 @@
 #include "../dynamic_libs/gx2_functions.h"
 #include "../dynamic_libs/fs_functions.h"
 #include "../utils/logger.h"
-#include "hardware_breakpoints.hpp"
+#include "hardware_breakpoints.h"
 #include "linked_list.h"
 #include "address.h"
 #include "stack.h"
@@ -23,6 +23,8 @@
 #include "../patcher/function_patcher_gx2.h"
 #include "raw_assembly_cheats.h"
 #include "sd_cheats.h"
+#include "threads.h"
+#include "software_breakpoints.h"
 
 void *client;
 void *commandBlock;
@@ -199,6 +201,12 @@ unsigned int receiveString(struct pygecko_bss_t *bss,
 	OSScreenFlipBuffersEx(1);
 }*/
 
+
+/* TODO
+ 		https://github.com/dimok789/ddd/blob/ca33ad1c759a0b67db33eedcf7fc4537198aad9c/src/discdumper.c#L667-L693
+		int ret = FSBindMount(pClient, pCmd, metaDir, "/vol/meta", -1);
+		FSBindUnmount(pClient, pCmd, metaDir, -1);
+	*/
 void considerInitializingFileSystem() {
 	if (!client) {
 		// Initialize the file system
@@ -1324,7 +1332,8 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 				bufferIndex += sizeof(bool);
 				bool write = buffer[bufferIndex];
 				bufferIndex += sizeof(bool);
-				setDataBreakpoint(address, read, write);
+				SetDataBreakpoint(address, read, write);
+				// setDataBreakpoint(address, read, write);
 
 				break;
 			}

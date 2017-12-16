@@ -1,13 +1,105 @@
-#include "stringify.h"
+#include <stdbool.h>
 #include "../dynamic_libs/os_functions.h"
-#include "threads.h"
+#include "../system/exception_handler.h"
+#include "../kernel/syscalls.h"
+#include "../common/common.h"
 #include "../utils/logger.h"
-#include "main.h"
-#include "utilities.h"
 #include "software_breakpoints.h"
 
-#ifndef TCPGECKO_BREAKPOINTS_H
-#define TCPGECKO_BREAKPOINTS_H
+#ifndef TCPGECKO_HARDWARE_BREAKPOINTS_H
+#define TCPGECKO_HARDWARE_BREAKPOINTS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*	Fix a gap in exception_handler.h
+    Yes, this is the dsisr.
+*/
+#define dsisr exception_specific0
+#define DSISR_DABR_MATCH 0x400000
+
+extern /* kernelmode */ void KernelSetDABR(unsigned int dabr);
+
+extern void SC0x2D_KernelSetDABR(unsigned int dabr);
+
+static void RegisterDataBreakpointHandler(unsigned char (*breakpointHandler)(OSContext *ctx));
+
+static void DataBreakpoints_Install();
+
+static unsigned char DataBreakpoints_DSIHandler(void *ctx);
+
+static unsigned char (*bHandler)(OSContext *ctx);
+
+static void RegisterDataBreakpointHandler(unsigned char (*breakpointHandler)(OSContext *ctx)) {
+	bHandler = breakpointHandler;
+}
+
+static inline int getDABRAddress(void *interruptedContext) {
+	OSContext *context = (OSContext *) interruptedContext;
+	return (int) context->srr0; // Offset 0xA4
+}
+
+unsigned char basicDABRBreakpointHandler(OSContext *context) {
+	log_print("Getting DABR address\n");
+	int address = getDABRAddress(context);
+	log_printf("Got DABR address: %08x\n", address);
+
+	if (OSIsAddressValid((const void *) address)) {
+		log_printf("Data breakpoint address: %x08\n", address);
+	} else {
+		log_printf("Data breakpoint invalid address: %x08\n", address);
+	}
+
+	return 0;
+}
+
+static void SetDataBreakpoint(unsigned int address, bool read, bool write) {
+	log_print("Before installing...\n");
+	DataBreakpoints_Install();
+	log_print("After installing...\n");
+	RegisterDataBreakpointHandler(basicDABRBreakpointHandler);
+	log_print("After registering...\n");
+
+	unsigned int dabr = address & ~0b00000111; //GCC \o/
+	log_printf("DABR 1: %08x\n", dabr);
+	dabr |= 0b00000100; //enable translation
+	log_printf("DABR 2: %08x\n", dabr);
+	if (read) {
+		dabr |= 0b00000001; //break on read
+		log_printf("DABR 3: %08x\n", dabr);
+	}
+	if (write) {
+		dabr |= 0b00000010; //break on write
+		log_printf("DABR 4: %08x\n", dabr);
+	}
+
+	log_print("Setting DABR...\n");
+	SC0x2D_KernelSetDABR(dabr);
+	log_print("DABR set!\n");
+}
+
+static unsigned char DataBreakpoints_DSIHandler(void *ctx) {
+	log_print("DSI handler\n");
+	OSContext *context = (OSContext *) ctx;
+	if (context->dsisr & DSISR_DABR_MATCH) {
+		log_print("Running BP handler\n");
+		return bHandler(context);
+	}
+
+	log_print("DSI exception\n");
+	return dsi_exception_cb(ctx);
+}
+
+static void DataBreakpoints_Install() {
+	kern_write((void *) (OS_SPECIFICS->addr_KernSyscallTbl1 + (0x2D * 4)), (unsigned int) &KernelSetDABR);
+	kern_write((void *) (OS_SPECIFICS->addr_KernSyscallTbl2 + (0x2D * 4)), (unsigned int) &KernelSetDABR);
+	kern_write((void *) (OS_SPECIFICS->addr_KernSyscallTbl3 + (0x2D * 4)), (unsigned int) &KernelSetDABR);
+	kern_write((void *) (OS_SPECIFICS->addr_KernSyscallTbl4 + (0x2D * 4)), (unsigned int) &KernelSetDABR);
+	kern_write((void *) (OS_SPECIFICS->addr_KernSyscallTbl5 + (0x2D * 4)), (unsigned int) &KernelSetDABR);
+
+	OSSetExceptionCallback((u8) OS_EXCEPTION_DSI, &DataBreakpoints_DSIHandler);
+}
 
 // Special purpose registers
 #define IABR 0x3F2
@@ -42,11 +134,6 @@ static inline void setIABR(unsigned int address) {
 
 static inline int getIABRAddress() {
 	return mfspr(IABR);
-}
-
-static inline int getDABRAddress(void *interruptedContext) {
-	OSContext *context = (OSContext *) interruptedContext;
-	return (int) context->srr0; // Offset 0xA4
 }
 
 static inline int getIABRMatch(void *interruptedContext) {
@@ -145,4 +232,8 @@ unsigned char breakPointHandler(void *interruptedContext) {
 	return 0;
 }
 
+#ifdef __cplusplus
+} //extern "C"
 #endif
+
+#endif //TCPGECKO_HARDWARE_BREAKPOINTS_H

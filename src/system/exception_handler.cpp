@@ -125,11 +125,11 @@ static unsigned char exceptionCallback(void *c, unsigned char exception_type) {
 	return 1;
 }
 
-static unsigned char dsi_exception_cb(void *context) {
+unsigned char dsi_exception_cb(void *context) {
 	return exceptionCallback(context, 0);
 }
 
-static unsigned char isi_exception_cb(void *context) {
+unsigned char isi_exception_cb(void *context) {
 	return exceptionCallback(context, 1);
 }
 
