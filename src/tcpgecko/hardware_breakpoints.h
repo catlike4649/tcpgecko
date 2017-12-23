@@ -41,53 +41,55 @@ static inline int getDABRAddress(void *interruptedContext) {
 }
 
 unsigned char basicDABRBreakpointHandler(OSContext *context) {
-	log_print("Getting DABR address\n");
+	// log_print("Getting DABR address\n");
 	int address = getDABRAddress(context);
-	log_printf("Got DABR address: %08x\n", address);
+	// log_printf("Got DABR address: %08x\n", address);
 
 	if (OSIsAddressValid((const void *) address)) {
-		log_printf("Data breakpoint address: %x08\n", address);
+		// log_printf("Data breakpoint address: %x08\n", address);
 	} else {
-		log_printf("Data breakpoint invalid address: %x08\n", address);
+		// log_printf("Data breakpoint invalid address: %x08\n", address);
 	}
 
 	return 0;
 }
 
 static void SetDataBreakpoint(unsigned int address, bool read, bool write) {
-	log_print("Before installing...\n");
+	// log_print("Before installing...\n");
 	DataBreakpoints_Install();
-	log_print("After installing...\n");
+	// log_print("After installing...\n");
 	RegisterDataBreakpointHandler(basicDABRBreakpointHandler);
-	log_print("After registering...\n");
+	// log_print("After registering...\n");
 
 	unsigned int dabr = address & ~0b00000111; //GCC \o/
-	log_printf("DABR 1: %08x\n", dabr);
+	// log_printf("DABR 1: %08x\n", dabr);
 	dabr |= 0b00000100; //enable translation
-	log_printf("DABR 2: %08x\n", dabr);
+	// log_printf("DABR 2: %08x\n", dabr);
 	if (read) {
 		dabr |= 0b00000001; //break on read
-		log_printf("DABR 3: %08x\n", dabr);
+		// log_printf("DABR 3: %08x\n", dabr);
 	}
 	if (write) {
 		dabr |= 0b00000010; //break on write
-		log_printf("DABR 4: %08x\n", dabr);
+		// log_printf("DABR 4: %08x\n", dabr);
 	}
 
-	log_print("Setting DABR...\n");
+	// log_print("Setting DABR...\n");
 	SC0x2D_KernelSetDABR(dabr);
-	log_print("DABR set!\n");
+	// log_print("DABR set!\n");
 }
 
 static unsigned char DataBreakpoints_DSIHandler(void *ctx) {
-	log_print("DSI handler\n");
-	OSContext *context = (OSContext *) ctx;
+	// log_print("DSI handler\n");
+	/*OSContext *context = (OSContext *) ctx;
 	if (context->dsisr & DSISR_DABR_MATCH) {
-		log_print("Running BP handler\n");
-		return bHandler(context);
-	}
+		// log_print("Running BP handler\n");
+		if (bHandler) {
+			return bHandler(context);
+		}
+	}*/
 
-	log_print("DSI exception\n");
+	// log_print("DSI exception\n");
 	return dsi_exception_cb(ctx);
 }
 
@@ -144,14 +146,14 @@ static inline int getIABRMatch(void *interruptedContext) {
 unsigned char breakPointHandler(void *interruptedContext);
 
 void registerBreakPointHandler() {
-	log_print("Registering breakpoint handler...\n");
+	// log_print("Registering breakpoint handler...\n");
 	// TODO Not working, never called?
 	// OSSetExceptionCallback((u8) OS_EXCEPTION_DSI, &breakPointHandler);
 	// OSSetExceptionCallback((u8) OS_EXCEPTION_ISI, &breakPointHandler);
 	// OSSetExceptionCallback((u8) OS_EXCEPTION_PROGRAM, &breakPointHandler);
 	OSSetExceptionCallbackEx((u8) OS_EXCEPTION_MODE_GLOBAL_ALL_CORES, (u8) OS_EXCEPTION_PROGRAM, &breakPointHandler);
 	// __OSSetInterruptHandler((u8) OS_EXCEPTION_PROGRAM, &breakPointHandler);
-	log_print("Breakpoint handler(s) registered!\n");
+	// log_print("Breakpoint handler(s) registered!\n");
 }
 
 /*void forceDebuggerInitialized() {
@@ -165,11 +167,11 @@ void forceDebuggerPresent() {
 }*/
 
 static inline void setupBreakpointSupport() {
-	/*log_print("Clear and enable...\n");
+	/*// log_print("Clear and enable...\n");
 	__OSClearAndEnableInterrupt();
-	log_print("Restore...\n");
+	// log_print("Restore...\n");
 	OSRestoreInterrupts();
-	log_print("Enable...\n");
+	// log_print("Enable...\n");
 	OSEnableInterrupts();
 	forceDebuggerPresent();
 	forceDebuggerInitialized();*/
@@ -179,11 +181,11 @@ static inline void setupBreakpointSupport() {
 
 void setDataBreakpoint(int address, bool read, bool write) {
 	setupBreakpointSupport();
-	log_print("Setting DABR...\n");
+	// log_print("Setting DABR...\n");
 	OSSetDABR(1, address, read, write);
-	log_print("DABR set\n");
+	// log_print("DABR set\n");
 	int enabled = OSIsInterruptEnabled();
-	log_printf("Interrupts enabled: %i\n", enabled);
+	// log_printf("Interrupts enabled: %i\n", enabled);
 }
 
 void setInstructionBreakpoint(unsigned int address) {
@@ -191,36 +193,36 @@ void setInstructionBreakpoint(unsigned int address) {
 
 	// int returnedAddress;
 
-	log_print("Setting IABR #1...\n");
+	// log_print("Setting IABR #1...\n");
 	// OSSetIABR(1, address);
 	setIABR(address);
-	log_print("IABR set #1...\n");
+	// log_print("IABR set #1...\n");
 	/*
 	// TODO Causes crash
 	returnedAddress = getIABRAddress();
-	log_printf("IABR spr value: %08x\n", returnedAddress);
+	// log_printf("IABR spr value: %08x\n", returnedAddress);
 
-	log_print("Setting IABR #2...\n");
+	// log_print("Setting IABR #2...\n");
 	setIABR(address);
-	log_print("IABR set #2...\n");
+	// log_print("IABR set #2...\n");
 	returnedAddress = mfspr(IABR);
-	log_printf("IABR spr value: %08x\n", returnedAddress);*/
+	// log_printf("IABR spr value: %08x\n", returnedAddress);*/
 }
 
 unsigned char breakPointHandler(void *interruptedContext) {
 	// Check for data breakpoints
 	int dataAddress = getDABRAddress(interruptedContext);
 	if (OSIsAddressValid((const void *) dataAddress)) {
-		log_printf("Data breakpoint address: %x08\n", dataAddress);
+		// log_printf("Data breakpoint address: %x08\n", dataAddress);
 	} else {
-		log_printf("Data breakpoint invalid address: %x08\n", dataAddress);
+		// log_printf("Data breakpoint invalid address: %x08\n", dataAddress);
 
 		// Check for instruction breakpoints
 		int instructionAddress = getIABRMatch(interruptedContext);
 		if (OSIsAddressValid((const void *) instructionAddress)) {
-			log_printf("Instruction breakpoint address: %x08\n", dataAddress);
+			// log_printf("Instruction breakpoint address: %x08\n", dataAddress);
 		} else {
-			log_print("Instruction breakpoint failed!\n");
+			// log_print("Instruction breakpoint failed!\n");
 		}
 	}
 
