@@ -1252,12 +1252,14 @@ static int processCommands(struct pygecko_bss_t *bss, int clientfd) {
 					int comparisonResult;
 
 					if (kernelRead) {
-						comparisonResult = kernelMemoryCompare((char *) currentAddress, searchBytes, searchBytesCount);
+						comparisonResult = kernelMemoryCompare((char *) currentAddress,
+															   searchBytes, searchBytesCount);
 					} else {
-						comparisonResult = memcmp((void *) currentAddress, searchBytes, searchBytesCount);
+						comparisonResult = memoryCompare((void *) currentAddress,
+														 searchBytes, (size_t) searchBytesCount);
 					}
 					if (comparisonResult == 0) {
-						// Search bytes have been found
+						// Search bytes have been found, add the addresses to the return buffer
 						((int *) buffer)[1 + searchBytesOccurrences] = currentAddress;
 						searchBytesOccurrences++;
 

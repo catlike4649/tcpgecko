@@ -184,7 +184,7 @@ void setDataBreakpoint(int address, bool read, bool write) {
 	// log_print("Setting DABR...\n");
 	OSSetDABR(1, address, read, write);
 	// log_print("DABR set\n");
-	int enabled = OSIsInterruptEnabled();
+	// int enabled = OSIsInterruptEnabled();
 	// log_printf("Interrupts enabled: %i\n", enabled);
 }
 

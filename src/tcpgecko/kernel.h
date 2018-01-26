@@ -99,7 +99,6 @@ int kernelMemoryCompare(const char *sourceBuffer,
 	}
 
 	bool loopEntered = false;
-
 	while (kern_read(sourceBuffer) == kern_read(destinationBuffer)) {
 		loopEntered = true;
 		sourceBuffer = (char *) sourceBuffer + KERNEL_MEMORY_COMPARE_STEP_SIZE;
