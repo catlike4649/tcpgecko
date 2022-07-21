@@ -37,6 +37,8 @@ extern int (*SYSRelaunchTitle)(int argc, char *argv);
 extern int (*SYSLaunchMenu)(void);
 
 extern int (*SYSCheckTitleExists)(u64 titleId);
+  
+extern int (*SYSLaunchTitle)(u64 titleId);
 
 #ifdef __cplusplus
 }

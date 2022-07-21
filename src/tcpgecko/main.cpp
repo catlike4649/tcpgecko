@@ -25,6 +25,8 @@
 
 bool isCodeHandlerInstalled = false;
 bool areSDCheatsEnabled = false;
+bool isRunningSplatoon = false;
+bool isRunningMinecraft = false;
 
 typedef enum {
 	EXIT,
@@ -149,10 +151,12 @@ int Menu_Main(void) {
 			PRINT_TEXT(7, 2, ipAddressMessageBuffer)
 			PRINT_TEXT(0, 5, "Press A to install TCP Gecko (with built-in code handler)...")
 			PRINT_TEXT(0, 6, "Press X to install TCP Gecko (with code handler and SD cheats)...")
+			PRINT_TEXT(0, 7, "Press + to install TCP Gecko and running Splatoon...")
+			PRINT_TEXT(0, 8, "Press - to install TCP Gecko and running Minecraft...")
 
-			PRINT_TEXT(0, 8, "Note:")
-			PRINT_TEXT(0, 9, "* You can enable loading SD cheats with Mocha SD access")
-			PRINT_TEXT(0, 10, "* Generate and store GCTUs to your SD card with JGecko U")
+			PRINT_TEXT(0, 11, "Note:")
+			PRINT_TEXT(0, 12, "* You can enable loading SD cheats with Mocha SD access")
+			PRINT_TEXT(0, 13, "* Generate and store GCTUs to your SD card with JGecko U")
 
 			// testMount();
 			/*if (isSDAccessEnabled()) {
@@ -185,6 +189,19 @@ int Menu_Main(void) {
 			areSDCheatsEnabled = true;
 
 			break;
+		} else if (pressedButtons & VPAD_BUTTON_PLUS) {
+			install();
+			launchMethod = TCP_GECKO;
+			isRunningSplatoon = true;
+				
+			break;
+			
+		} else if (pressedButtons & VPAD_BUTTON_MINUS) {
+			install();
+			launchMethod = TCP_GECKO;
+			isRunningMinecraft = true;
+				
+			break;
 		}
 
 		// Button pressed?
@@ -203,6 +220,12 @@ int Menu_Main(void) {
 	if (launchMethod == EXIT) {
 		// Exit the installer
 		return EXIT_SUCCESS;
+	} else if (isRunningSplatoon == true) {
+		//launch Splatoon
+		SYSLaunchTitle(0x0005000010162B00);
+	} else if (isRunningMinecraft == true) {
+		//launch Minecraft
+		SYSLaunchTitle(0x00050000101DBE00);
 	} else {
 		// Launch system menu
 		SYSLaunchMenu();
